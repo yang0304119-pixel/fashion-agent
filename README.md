@@ -88,6 +88,11 @@ fashion-agent/
 | Auto Resolution Rate | 自动处理比例 |
 | Human Review Trigger Accuracy | 人工审核触发准确率 |
 
+## 环境要求
+
+- Python 3.10+
+- 推荐使用虚拟环境管理依赖
+
 ## 快速开始
 
 ```bash
