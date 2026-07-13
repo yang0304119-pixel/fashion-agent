@@ -1,0 +1,23 @@
+# FashionAgent 依赖清单
+# 按 Phase 分块，后续 Phase 添加时不删除已有依赖
+
+# === Phase 1: 项目骨架 ===
+# 使用 >= 而非 == 以保证 Python 3.14 兼容性
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+sqlalchemy>=2.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# === Phase 2: RAG ===
+# chromadb==0.5.18
+# openai==1.55.0
+# tiktoken==0.8.0
+
+# === Phase 3: LangGraph ===
+# langgraph==0.2.60
+# langchain-core==0.3.29
+
+# === Phase 7: 评测 ===
+# rouge-score==0.1.2
