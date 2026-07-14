@@ -61,5 +61,14 @@ class Settings(BaseSettings):
         db_dir.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_dir / 'fashion.db'}"
 
+    @property
+    def resolved_chroma_path(self) -> str:
+        """返回 Chroma 持久化路径，空值时使用默认 data/vector_store/"""
+        if self.CHROMA_PATH:
+            return self.CHROMA_PATH
+        path = self.PROJECT_ROOT / "data" / "vector_store"
+        path.mkdir(parents=True, exist_ok=True)
+        return str(path)
+
 
 settings = Settings()

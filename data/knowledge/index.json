@@ -1,0 +1,55 @@
+{
+  "version": "1.1",
+  "last_updated": "2026-07-15",
+  "documents": [
+    {
+      "filename": "size-guide.md",
+      "title": "服装尺码指南",
+      "type": "尺码知识",
+      "category": "通用",
+      "description": "男装尺码对照表、身高体重速查、版型偏码说明、测量方法"
+    },
+    {
+      "filename": "fabric-care.md",
+      "title": "面料种类与洗护指南",
+      "type": "商品知识",
+      "category": "通用",
+      "description": "常见面料分类与特点、羽绒服参数解析、洗涤方式指南、FAQ"
+    },
+    {
+      "filename": "after-sales-rules.md",
+      "title": "售后退款规则",
+      "type": "售后规则",
+      "category": "通用",
+      "description": "退货政策、质量问题处理、退款规则、换货规则、FAQ"
+    },
+    {
+      "filename": "logistics-rules.md",
+      "title": "物流与配送规则",
+      "type": "物流规则",
+      "category": "通用",
+      "description": "发货时效、配送范围、运费规则、物流查询、FAQ"
+    },
+    {
+      "filename": "products.md",
+      "title": "羽绒服商品详解",
+      "type": "商品知识",
+      "category": "男装羽绒服",
+      "description": "6款羽绒服详细卖点、材质、适用场景、版型说明、对比速查"
+    },
+    {
+      "filename": "faq.md",
+      "title": "服装常见问题FAQ",
+      "type": "商品知识",
+      "category": "通用",
+      "description": "羽绒服、尺码、面料洗护、物流、售后高频问答"
+    },
+    {
+      "filename": "return-process.md",
+      "title": "退款换货操作流程",
+      "type": "售后规则",
+      "category": "通用",
+      "description": "七天无理由退货、质量问题、换货、退款到账时间、特殊情况处理"
+    }
+  ]
+}

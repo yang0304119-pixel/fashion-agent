@@ -11,9 +11,9 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 
 # === Phase 2: RAG ===
-# chromadb==0.5.18
-# openai==1.55.0
-# tiktoken==0.8.0
+chromadb>=0.5.15
+openai>=1.55.0
+tiktoken>=0.8.0
 
 # === Phase 3: LangGraph ===
 # langgraph==0.2.60
