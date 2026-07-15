@@ -94,4 +94,33 @@ def _format_tool_reply(intent: str, result: dict) -> str | None:
     if intent == "size_recommend":
         return f"推荐您选择 {data['size']} 码。{data['reason']}"
 
+    if intent == "refund_request":
+        return _format_refund_reply(data, result)
+
+    return None
+
+
+def _format_refund_reply(data: dict, result: dict) -> str | None:
+    """根据退款结果生成回复。
+
+    Args:
+        data: 工具返回的 data 字段。
+        result: 工具返回的完整结果。
+
+    Returns:
+        自然语言回复字符串。
+    """
+    # 自动审批（≤100 元）
+    if data.get("auto_approved"):
+        return f"已为您自动处理退款，{data.get('message', '请查收')}。"
+
+    # 创建了人工审核工单（>100 元）
+    ticket_id = data.get("ticket_id")
+    if ticket_id:
+        return (
+            f"已为您创建退款工单（编号 {ticket_id}），"
+            f"金额超过自动审批限额，需要客服审核后才能处理。"
+            f"请耐心等待，审核结果会第一时间通知您。"
+        )
+
     return None

@@ -118,6 +118,20 @@ PRODUCTS = [
         "care_instructions": "30°C以下温水洗涤；不可漂白；低温熨烫；不可干洗；建议使用中性洗涤剂；晾干后轻拍使羽绒蓬松。",
         "stock": 40,
     },
+    # 低价商品：用于测试"≤100 自动退"路径
+    {
+        "id": 7,
+        "tenant_id": 1,
+        "name": "纯色羊毛围巾",
+        "category": "配饰",
+        "price": 89.00,
+        "colors": ["驼色", "灰色", "黑色"],
+        "sizes": ["均码"],
+        "description": "柔软亲肤纯羊毛围巾，经典纯色百搭款，秋冬必备保暖单品。",
+        "materials": "100%澳洲美利奴羊毛",
+        "care_instructions": "建议干洗或手洗；不可漂白；平铺晾干；不可拧干。",
+        "stock": 200,
+    },
 ]
 
 ORDERS = [
@@ -128,6 +142,8 @@ ORDERS = [
     {"id": 10004, "tenant_id": 1, "user_id": 2, "product_id": 3, "quantity": 1, "total_price": 459.00, "status": "refunded"},
     {"id": 10005, "tenant_id": 1, "user_id": 3, "product_id": 5, "quantity": 1, "total_price": 259.00, "status": "shipped"},
     {"id": 10006, "tenant_id": 1, "user_id": 3, "product_id": 6, "quantity": 2, "total_price": 718.00, "status": "delivered"},
+    # 测试小额自动退：围巾 89 元，≤100
+    {"id": 10007, "tenant_id": 1, "user_id": 1, "product_id": 7, "quantity": 1, "total_price": 89.00, "status": "pending"},
 ]
 
 

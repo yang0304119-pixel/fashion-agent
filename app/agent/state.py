@@ -49,6 +49,10 @@ class AgentState(TypedDict):
     tool_result: dict | None          # 工具返回的结构化数据
     tool_status: str                  # success / error / pending
 
+    # ── 退款流程（Phase 5） ──
+    risk_level: str                   # low / medium / high
+    human_required: bool              # 是否需要人工审核
+
     # ── 最终回复 ──
     final_answer: str
 

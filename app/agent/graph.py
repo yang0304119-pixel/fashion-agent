@@ -22,6 +22,7 @@ from app.agent.state import AgentState
 from app.agent.nodes.router_node import router_node
 from app.agent.nodes.rag_node import rag_node
 from app.agent.nodes.tool_node import tool_node
+from app.agent.nodes.refund_node import refund_node
 from app.agent.nodes.answer_node import answer_node
 
 
@@ -30,7 +31,7 @@ def route_by_intent(state: AgentState) -> str:
 
     - knowledge_query → RAG 检索
     - size_recommend / order_query → 工具调用
-    - refund_request → Phase 5 实现
+    - refund_request → 退款流程（查订单 → 风险判断 → 自动/工单）
     - fallback → 直接回答
     """
     intent: str = state.get("intent", "fallback")
@@ -41,7 +42,9 @@ def route_by_intent(state: AgentState) -> str:
     if intent in ("size_recommend", "order_query"):
         return "tool"
 
-    # refund_request 暂未实现（Phase 5），先走 answer
+    if intent == "refund_request":
+        return "refund"
+
     return "answer"
 
 
@@ -53,6 +56,7 @@ workflow = StateGraph(AgentState)
 workflow.add_node("router", router_node)
 workflow.add_node("rag", rag_node)
 workflow.add_node("tool", tool_node)
+workflow.add_node("refund", refund_node)
 workflow.add_node("answer", answer_node)
 
 # 设置入口
@@ -65,13 +69,15 @@ workflow.add_conditional_edges(
     {
         "rag": "rag",
         "tool": "tool",
+        "refund": "refund",
         "answer": "answer",
     },
 )
 
-# RAG / Tool 走完后到 answer
+# RAG / Tool / Refund 走完后到 answer
 workflow.add_edge("rag", "answer")
 workflow.add_edge("tool", "answer")
+workflow.add_edge("refund", "answer")
 
 # answer 到结束
 workflow.set_finish_point("answer")
