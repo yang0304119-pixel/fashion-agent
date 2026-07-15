@@ -21,23 +21,27 @@ from langgraph.graph import StateGraph
 from app.agent.state import AgentState
 from app.agent.nodes.router_node import router_node
 from app.agent.nodes.rag_node import rag_node
+from app.agent.nodes.tool_node import tool_node
 from app.agent.nodes.answer_node import answer_node
 
 
 def route_by_intent(state: AgentState) -> str:
     """根据 intent 决定下一个节点。
 
-    当前只处理 knowledge_query 和 fallback 两条路径，
-    其他意图在 Phase 4/5 的 tool_node 和 human_node 加入时扩展。
+    - knowledge_query → RAG 检索
+    - size_recommend / order_query → 工具调用
+    - refund_request → Phase 5 实现
+    - fallback → 直接回答
     """
     intent: str = state.get("intent", "fallback")
 
-    # 目前只有 knowledge_query 走 RAG 链路
     if intent == "knowledge_query":
         return "rag"
 
-    # size_recommend / order_query / refund_request 暂未实现，
-    # 先统一走 fallback（Phase 4/5 各加入对应节点后改这里）
+    if intent in ("size_recommend", "order_query"):
+        return "tool"
+
+    # refund_request 暂未实现（Phase 5），先走 answer
     return "answer"
 
 
@@ -48,6 +52,7 @@ workflow = StateGraph(AgentState)
 # 添加节点
 workflow.add_node("router", router_node)
 workflow.add_node("rag", rag_node)
+workflow.add_node("tool", tool_node)
 workflow.add_node("answer", answer_node)
 
 # 设置入口
@@ -59,12 +64,14 @@ workflow.add_conditional_edges(
     route_by_intent,
     {
         "rag": "rag",
+        "tool": "tool",
         "answer": "answer",
     },
 )
 
-# RAG 走完后到 answer
+# RAG / Tool 走完后到 answer
 workflow.add_edge("rag", "answer")
+workflow.add_edge("tool", "answer")
 
 # answer 到结束
 workflow.set_finish_point("answer")

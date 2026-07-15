@@ -34,6 +34,7 @@ class Product(Base):
     description = Column(Text, nullable=False, comment="商品描述")
     materials = Column(Text, nullable=False, comment="材质说明")
     care_instructions = Column(Text, nullable=False, comment="洗护说明")
+    stock = Column(Integer, nullable=False, default=0, comment="库存数量")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
 
     def __repr__(self) -> str:

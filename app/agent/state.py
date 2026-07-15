@@ -45,7 +45,11 @@ class AgentState(TypedDict):
     retrieved_doc_ids: list[str]
     retrieved_scores: list[float]
 
+    # ── 工具调用（Phase 4） ──
+    tool_result: dict | None          # 工具返回的结构化数据
+    tool_status: str                  # success / error / pending
+
     # ── 最终回复 ──
     final_answer: str
 
-    # ── Phase 4/5 会追加：tool_result, tool_status, risk_level, human_required ──
+    # ── Phase 5 会追加：risk_level, human_required ──
