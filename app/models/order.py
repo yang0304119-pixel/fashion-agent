@@ -18,6 +18,7 @@ class Order(Base):
     __tablename__ = "order"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, comment="所属租户 ID")
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False, comment="用户 ID")
     product_id = Column(Integer, ForeignKey("product.id"), nullable=False, comment="商品 ID")
     quantity = Column(Integer, nullable=False, default=1, comment="数量")

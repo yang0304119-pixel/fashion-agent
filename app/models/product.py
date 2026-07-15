@@ -15,7 +15,7 @@ sizes 使用 JSON 字段存储可用尺码列表，比关联表更轻量。
 
 from decimal import Decimal
 
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, JSON, ForeignKey
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -25,6 +25,7 @@ class Product(Base):
     __tablename__ = "product"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, comment="所属租户 ID")
     name = Column(String(200), nullable=False, comment="商品名称")
     category = Column(String(50), nullable=False, comment="商品分类")
     price = Column(Numeric(10, 2), nullable=False, comment="单价")

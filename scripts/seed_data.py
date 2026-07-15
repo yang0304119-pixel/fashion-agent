@@ -20,12 +20,17 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.core.database import init_db, SessionLocal
-from app.models import User, Product, Order
+from app.models import Tenant, User, Product, Order
 
 logger = logging.getLogger(__name__)
 
 
 # ── 种子数据 ──────────────────────────────────────────────
+
+# 默认租户：服装方向测试店铺
+TENANTS = [
+    {"id": 1, "name": "默认测试店铺", "industry": "服装", "contact": "张店主"},
+]
 
 USERS = [
     {"id": 1, "username": "张三"},
@@ -33,9 +38,11 @@ USERS = [
     {"id": 3, "username": "王五"},
 ]
 
+# tenant_id=1 关联到默认测试店铺
 PRODUCTS = [
     {
         "id": 1,
+        "tenant_id": 1,
         "name": "极寒系列加厚羽绒服",
         "category": "羽绒服",
         "price": 499.00,
@@ -47,6 +54,7 @@ PRODUCTS = [
     },
     {
         "id": 2,
+        "tenant_id": 1,
         "name": "轻薄都市羽绒服",
         "category": "羽绒服",
         "price": 299.00,
@@ -58,6 +66,7 @@ PRODUCTS = [
     },
     {
         "id": 3,
+        "tenant_id": 1,
         "name": "户外三合一冲锋羽绒服",
         "category": "羽绒服",
         "price": 459.00,
@@ -69,6 +78,7 @@ PRODUCTS = [
     },
     {
         "id": 4,
+        "tenant_id": 1,
         "name": "商务修身羽绒服",
         "category": "羽绒服",
         "price": 399.00,
@@ -80,6 +90,7 @@ PRODUCTS = [
     },
     {
         "id": 5,
+        "tenant_id": 1,
         "name": "连帽短款羽绒服",
         "category": "羽绒服",
         "price": 259.00,
@@ -91,6 +102,7 @@ PRODUCTS = [
     },
     {
         "id": 6,
+        "tenant_id": 1,
         "name": "加长保暖羽绒服",
         "category": "羽绒服",
         "price": 359.00,
@@ -104,12 +116,12 @@ PRODUCTS = [
 
 ORDERS = [
     # id 从 10001 开始，模拟真实订单号
-    {"id": 10001, "user_id": 1, "product_id": 1, "quantity": 1, "total_price": 499.00, "status": "shipped"},
-    {"id": 10002, "user_id": 1, "product_id": 2, "quantity": 2, "total_price": 598.00, "status": "delivered"},
-    {"id": 10003, "user_id": 2, "product_id": 4, "quantity": 1, "total_price": 399.00, "status": "pending"},
-    {"id": 10004, "user_id": 2, "product_id": 3, "quantity": 1, "total_price": 459.00, "status": "refunded"},
-    {"id": 10005, "user_id": 3, "product_id": 5, "quantity": 1, "total_price": 259.00, "status": "shipped"},
-    {"id": 10006, "user_id": 3, "product_id": 6, "quantity": 2, "total_price": 718.00, "status": "delivered"},
+    {"id": 10001, "tenant_id": 1, "user_id": 1, "product_id": 1, "quantity": 1, "total_price": 499.00, "status": "shipped"},
+    {"id": 10002, "tenant_id": 1, "user_id": 1, "product_id": 2, "quantity": 2, "total_price": 598.00, "status": "delivered"},
+    {"id": 10003, "tenant_id": 1, "user_id": 2, "product_id": 4, "quantity": 1, "total_price": 399.00, "status": "pending"},
+    {"id": 10004, "tenant_id": 1, "user_id": 2, "product_id": 3, "quantity": 1, "total_price": 459.00, "status": "refunded"},
+    {"id": 10005, "tenant_id": 1, "user_id": 3, "product_id": 5, "quantity": 1, "total_price": 259.00, "status": "shipped"},
+    {"id": 10006, "tenant_id": 1, "user_id": 3, "product_id": 6, "quantity": 2, "total_price": 718.00, "status": "delivered"},
 ]
 
 
@@ -125,7 +137,12 @@ def seed_database():
             print("[OK] 数据库已有数据，跳过种子初始化")
             return
 
-        # 按依赖顺序插入：user → product → order
+        # 按依赖顺序插入：tenant → user → product → order
+        print("[INFO] 正在插入租户数据...")
+        for tenant_data in TENANTS:
+            db.add(Tenant(**tenant_data))
+        db.flush()
+
         print("[INFO] 正在插入用户数据...")
         for user_data in USERS:
             db.add(User(**user_data))
@@ -146,6 +163,7 @@ def seed_database():
         print(f"\n{'='*40}")
         print(f"种子数据初始化完成！")
         print(f"{'='*40}")
+        print(f"  租户：{db.query(Tenant).count()} 家")
         print(f"  用户：{db.query(User).count()} 人")
         print(f"  商品：{db.query(Product).count()} 款")
         print(f"  订单：{db.query(Order).count()} 单")

@@ -18,7 +18,7 @@
 
 import logging
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.core.config import settings
@@ -30,6 +30,14 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     echo=False,  # 生产环境设为 False；调试时可改为 True 查看 SQL
 )
+
+# SQLite 默认不强制外键约束，需在每次连接时手动启用
+# 否则 ForeignKey 只存在于表结构定义中，实际插入脏数据不会报错
+@event.listens_for(engine, "connect")
+def _enable_sqlite_fks(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -44,7 +52,7 @@ def init_db():
     """
     # 延迟导入确保所有模型注册到 Base.metadata
     from app.models import (  # noqa: F401
-        User, Product, Order, Ticket, AgentTrace, UnresolvedCase,
+        Tenant, User, Product, Order, Ticket, AgentTrace, UnresolvedCase,
     )
 
     Base.metadata.create_all(bind=engine)

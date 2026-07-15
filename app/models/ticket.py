@@ -18,6 +18,7 @@ class Ticket(Base):
     __tablename__ = "ticket"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, comment="所属租户 ID")
     order_id = Column(Integer, ForeignKey("order.id"), nullable=False, comment="关联订单 ID")
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False, comment="用户 ID")
     type = Column(String(20), nullable=False, comment="工单类型：refund(退款) / exchange(换货)")
