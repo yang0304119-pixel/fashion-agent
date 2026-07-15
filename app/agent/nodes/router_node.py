@@ -31,6 +31,7 @@ _RULES: list[tuple[list[str], str]] = [
     (["退款", "退货", "质量问题", "不想要了", "起球", "破损"], "refund_request"),
     (["订单", "发货", "物流", "快递"], "order_query"),
     (["身高", "体重", "尺码", "穿什么码"], "size_recommend"),
+    (["库存", "有货", "现货", "还有吗"], "inventory_query"),
     (["材质", "面料", "保暖", "洗", "成分"], "knowledge_query"),
 ]
 
@@ -42,6 +43,7 @@ _CLASSIFY_PROMPT: str = """你是一个服装电商客服意图分类器。
 - size_recommend: 询问尺码推荐、身高体重对应尺码
 - order_query: 查询订单状态、物流信息、发货情况
 - refund_request: 申请退款、退货、质量问题售后
+- inventory_query: 查询商品库存、是否有货
 - fallback: 闲聊、问候、非业务问题或无法判断
 
 用户输入：{message}
@@ -121,7 +123,7 @@ def _classify_by_llm(message: str) -> tuple[str, float]:
         raw = response.choices[0].message.content.strip().lower()
 
         # 解析 LLM 输出
-        valid_intents = {"knowledge_query", "size_recommend", "order_query", "refund_request", "fallback"}
+        valid_intents = {"knowledge_query", "size_recommend", "order_query", "refund_request", "inventory_query", "fallback"}
         if raw in valid_intents:
             return raw, 0.85
 

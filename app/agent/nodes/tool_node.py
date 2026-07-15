@@ -27,7 +27,7 @@ from app.tools.inventory_tool import query_inventory
 _TOOL_DISPATCH: dict[str, tuple] = {
     "order_query": (query_order, lambda msg: _extract_order_id(msg)),
     "size_recommend": (size_recommend, lambda msg: _extract_size_params(msg)),
-    # query_inventory 暂不自动调度，后续用户明确问库存时再接入
+    "inventory_query": (query_inventory, lambda msg: _extract_product_id(msg)),
 }
 
 
@@ -113,3 +113,38 @@ def _extract_size_params(message: str) -> dict:
         return {"error": "未提取到完整的身高体重信息"}
 
     return {"height": height, "weight": weight, "style": style}
+
+
+def _extract_product_id(message: str) -> dict:
+    """从消息中提取商品 ID。
+
+    支持两种方式：
+    1. 数字编号：商品 1、商品编号 1、id 1
+    2. 商品名称关键词匹配：极寒、轻薄、冲锋等
+    """
+    # 方式1：数字编号
+    patterns = [
+        r"商品[号#\s]*(\d+)",
+        r"商品编号[\s:：]*(\d+)",
+        r"[iI][dD][\s:：]*(\d+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message)
+        if match:
+            return {"product_id": int(match.group(1))}
+
+    # 方式2：商品名称关键词 → ID 映射
+    _NAME_MAP: list[tuple[list[str], int]] = [
+        (["极寒", "加厚"], 1),
+        (["轻薄", "都市"], 2),
+        (["三合一", "冲锋"], 3),
+        (["商务", "修身"], 4),
+        (["连帽", "短款"], 5),
+        (["加长", "长款"], 6),
+        (["围巾", "羊毛"], 7),
+    ]
+    for keywords, pid in _NAME_MAP:
+        if any(k in message for k in keywords):
+            return {"product_id": pid}
+
+    return {"error": "未找到商品编号或名称"}

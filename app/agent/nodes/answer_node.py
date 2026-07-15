@@ -97,6 +97,14 @@ def _format_tool_reply(intent: str, result: dict) -> str | None:
     if intent == "refund_request":
         return _format_refund_reply(data, result)
 
+    if intent == "inventory_query":
+        return (
+            f"商品「{data['name']}」当前库存 {data['stock']} 件，"
+            f"售价 {data['price']} 元/件。"
+            f"可选颜色：{'/'.join(data['colors'])}，"
+            f"尺码：{'/'.join(data['sizes'])}。"
+        )
+
     return None
 
 

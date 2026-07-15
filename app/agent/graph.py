@@ -40,7 +40,7 @@ def route_by_intent(state: AgentState) -> str:
     if intent == "knowledge_query":
         return "rag"
 
-    if intent in ("size_recommend", "order_query"):
+    if intent in ("size_recommend", "order_query", "inventory_query"):
         return "tool"
 
     if intent == "refund_request":
