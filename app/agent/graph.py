@@ -23,6 +23,7 @@ from app.agent.nodes.router_node import router_node
 from app.agent.nodes.rag_node import rag_node
 from app.agent.nodes.tool_node import tool_node
 from app.agent.nodes.refund_node import refund_node
+from app.agent.nodes.trace_node import trace_node
 from app.agent.nodes.answer_node import answer_node
 
 
@@ -58,6 +59,7 @@ workflow.add_node("rag", rag_node)
 workflow.add_node("tool", tool_node)
 workflow.add_node("refund", refund_node)
 workflow.add_node("answer", answer_node)
+workflow.add_node("trace", trace_node)
 
 # 设置入口
 workflow.set_entry_point("router")
@@ -79,8 +81,9 @@ workflow.add_edge("rag", "answer")
 workflow.add_edge("tool", "answer")
 workflow.add_edge("refund", "answer")
 
-# answer 到结束
-workflow.set_finish_point("answer")
+# answer → trace → 结束
+workflow.add_edge("answer", "trace")
+workflow.set_finish_point("trace")
 
 # 编译
 app = workflow.compile()

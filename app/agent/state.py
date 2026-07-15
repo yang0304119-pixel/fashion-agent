@@ -22,13 +22,9 @@ from typing import TypedDict
 class AgentState(TypedDict):
     """Agent 工作流的共享状态，所有节点读取和写入此结构。
 
-    Phase 3 字段：
-    - session_id / user_id / message: 请求基础信息
-    - intent / confidence / missing_slots: 路由结果
-    - retrieved_docs / retrieved_doc_ids / retrieved_scores: RAG 检索结果
-    - final_answer: 最终回复
-
-    Phase 4+ 会追加 tool_result / risk_level / human_required 等字段。
+    Phase 3 基础字段：session_id / user_id / message / intent / confidence
+    Phase 4 追加：tool_result / tool_status
+    Phase 5 追加：risk_level / human_required
     """
     # ── 基础信息 ──
     session_id: str
