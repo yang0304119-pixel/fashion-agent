@@ -18,20 +18,23 @@
 
 from pathlib import Path
 from decimal import Decimal
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+)
 
 
 class Settings(BaseSettings):
-    # ── 项目路径 ──
-    PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
+    PROJECT_ROOT: Path = PROJECT_ROOT_PATH
 
     # ── 数据库 ──
     DATABASE_URL: str = ""
 
     # ── LLM 配置（占位，Phase 3 启用） ──
-    LLM_API_KEY: str = ""
-    LLM_API_BASE: str = "https://api.openai.com/v1"
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_API_KEY: str
+    LLM_API_BASE: str
+    LLM_MODEL: str
 
     # ── 退款策略 ──
     # 小于等于此金额的退款自动审批，超过则触发人工审核
@@ -48,9 +51,10 @@ class Settings(BaseSettings):
     # ── 日志 ──
     LOG_LEVEL: str = "INFO"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT_PATH / ".env",
+        env_file_encoding="utf-8",
+    )
 
     @property
     def resolved_database_url(self) -> str:
