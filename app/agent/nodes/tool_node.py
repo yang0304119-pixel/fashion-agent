@@ -20,6 +20,7 @@ from app.agent.state import AgentState
 from app.tools.order_tool import query_order
 from app.tools.size_tool import size_recommend
 from app.tools.inventory_tool import query_inventory
+from app.tools._utils import extract_order_id
 
 
 # intent → (工具函数, 参数提取函数) 映射表
@@ -54,7 +55,7 @@ def tool_node(state: AgentState) -> dict:
 
     if "error" in params:
         return {
-            "tool_result": None,
+            "tool_result": {"success": False, "error": params["error"]},
             "tool_status": "error",
         }
 
@@ -68,18 +69,10 @@ def tool_node(state: AgentState) -> dict:
 
 
 def _extract_order_id(message: str) -> dict:
-    """从消息中提取订单号。"""
-    # 匹配"订单 10001"、"10001号"、"订单号 10001" 等模式
-    patterns = [
-        r"订单[号#\s]*(\d{5,})",
-        r"(\d{5,})[号#]",
-        r"订单[\s:：]*(\d{5,})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, message)
-        if match:
-            return {"order_id": int(match.group(1))}
-
+    """从消息中提取订单号（委托给共享函数）。"""
+    order_id = extract_order_id(message)
+    if order_id is not None:
+        return {"order_id": order_id}
     return {"error": "未找到订单号"}
 
 

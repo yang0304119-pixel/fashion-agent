@@ -13,9 +13,11 @@ Phase 1 仅提供健康检查端点，后续 Phase 逐步注册业务路由。
 """
 
 import logging
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
@@ -157,6 +159,12 @@ def get_traces(session_id: str):
     finally:
         db.close()
 
+
+# ── 挂载前端静态页面 ──
+# FastAPI 按路由注册顺序匹配，API 路由优先于静态文件
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if frontend_dir.exists():
+    fastapi_app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 if __name__ == "__main__":
     uvicorn.run(

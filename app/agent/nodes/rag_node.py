@@ -56,7 +56,17 @@ def rag_node(state: AgentState) -> dict:
     message: str = state.get("message", "").strip()
 
     # ── 1. 语义检索 ──
-    docs = retrieve(message, top_k=3)
+    try:
+        docs = retrieve(message, top_k=3)
+    except FileNotFoundError:
+        # Chroma 集合不存在（未初始化），返回友好降级提示而非 500
+        return {
+            "retrieved_docs": [],
+            "retrieved_doc_ids": [],
+            "retrieved_scores": [],
+            "final_answer": "抱歉，知识库尚未初始化，请联系管理员导入知识库后再试。",
+        }
+
     if not docs:
         return {
             "retrieved_docs": [],

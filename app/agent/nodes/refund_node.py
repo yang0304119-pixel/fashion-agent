@@ -12,11 +12,10 @@
 # ─────────────────────────────
 """
 
-import re
-
 from app.agent.state import AgentState
 from app.tools.order_tool import query_order
 from app.tools.refund_tool import risk_check, create_ticket
+from app.tools._utils import extract_order_id
 from app.core.config import settings
 
 
@@ -50,6 +49,15 @@ def refund_node(state: AgentState) -> dict:
     if not order_result.get("success"):
         return {
             "tool_result": order_result,
+            "tool_status": "error",
+            "risk_level": "medium",
+            "human_required": False,
+        }
+
+    # ── 校验订单归属：防止用户操作他人订单 ──
+    if order_result.get("data", {}).get("user_id") != user_id:
+        return {
+            "tool_result": {"success": False, "error": "无权操作他人订单"},
             "tool_status": "error",
             "risk_level": "medium",
             "human_required": False,
@@ -106,17 +114,8 @@ def refund_node(state: AgentState) -> dict:
 
 
 def _extract_order_id(message: str) -> int | None:
-    """从消息中提取订单号。"""
-    patterns = [
-        r"订单[号#\s]*(\d{5,})",
-        r"(\d{5,})[号#]",
-        r"订单[\s:：]*(\d{5,})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, message)
-        if match:
-            return int(match.group(1))
-    return None
+    """从消息中提取订单号（委托给共享函数）。"""
+    return extract_order_id(message)
 
 
 def _extract_reason(message: str) -> str:
