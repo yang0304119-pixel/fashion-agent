@@ -68,6 +68,11 @@ def react_node(state: AgentState) -> dict:
         {"role": "user", "content": message},
     ]
 
+    # ── 检查 API Key 配置 ──
+    if not settings.LLM_API_KEY:
+        logger.warning("LLM_API_KEY 未配置，ReAct 节点无法调用 LLM")
+        return {"final_answer": "抱歉，AI 服务未配置，请稍后再试或联系客服。"}
+
     client = OpenAI(
         api_key=settings.LLM_API_KEY,
         base_url=settings.LLM_API_BASE,
