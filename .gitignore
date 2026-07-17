@@ -1,5 +1,4 @@
 # Python
-__pycache__/
 *.py[cod]
 *.egg-info/
 *.egg
@@ -22,6 +21,7 @@ env/
 
 # Vector store (generated locally)
 data/vector_store/
+data/chroma/
 
 # Environment variables
 .env
@@ -34,3 +34,13 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+# 本地模型
+models/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+
+# Chroma 向量数据库，按实际目录调整
+data/knowledge/chroma/

@@ -40,6 +40,10 @@ class AgentState(TypedDict):
     retrieved_docs: list[str]
     retrieved_doc_ids: list[str]
     retrieved_scores: list[float]
+    retrieved_sources: list[dict[str, str]]
+    rag_error_code: str | None
+    rag_error_stage: str | None
+    rag_error_type: str | None
 
     # ── 工具调用（Phase 4） ──
     tool_result: dict | None          # 工具返回的结构化数据

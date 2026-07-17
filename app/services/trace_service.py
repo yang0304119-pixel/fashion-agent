@@ -14,11 +14,15 @@ Trace 服务 — 请求级可观测性
 """
 
 import json
+import logging
 
 from app.core.database import SessionLocal
 from app.models.agent_trace import AgentTrace
 from app.models.unresolved_case import UnresolvedCase
 from app.agent.state import AgentState
+
+
+logger = logging.getLogger(__name__)
 
 
 def record_trace(state: AgentState) -> int | None:
@@ -33,6 +37,8 @@ def record_trace(state: AgentState) -> int | None:
     Returns:
         trace_id: agent_trace 表记录 ID，写入失败时返回 None。
     """
+    db = None
+
     try:
         # 构造用于 JSON 序列化的 input/output
         trace_input = {
@@ -51,6 +57,18 @@ def record_trace(state: AgentState) -> int | None:
             "final_answer": state.get("final_answer"),
             "retrieved_doc_ids": state.get("retrieved_doc_ids"),
             "retrieved_scores": state.get("retrieved_scores"),
+            "retrieved_sources": state.get(
+                "retrieved_sources"
+            ),
+            "rag_error_code": state.get(
+                "rag_error_code"
+            ),
+            "rag_error_stage": state.get(
+                "rag_error_stage"
+            ),
+            "rag_error_type": state.get(
+                "rag_error_type"
+            ),
         }
 
         trace = AgentTrace(
@@ -75,11 +93,12 @@ def record_trace(state: AgentState) -> int | None:
         return trace.id
 
     except Exception:
-        # Trace 写入失败不影响主流程，只打日志
+        logger.exception("Agent Trace 写入失败")
         return None
 
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def record_unresolved(state: AgentState) -> int | None:
@@ -98,6 +117,8 @@ def record_unresolved(state: AgentState) -> int | None:
     if intent != "fallback" and confidence >= 0.5:
         return None
 
+    db = None
+
     try:
         case = UnresolvedCase(
             user_message=state.get("message", ""),
@@ -115,10 +136,12 @@ def record_unresolved(state: AgentState) -> int | None:
         return case.id
 
     except Exception:
+        logger.exception("未解决案例写入失败")
         return None
 
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def _safe_serialize(value: object) -> object:

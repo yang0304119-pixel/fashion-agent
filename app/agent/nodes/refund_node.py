@@ -84,14 +84,10 @@ def refund_node(state: AgentState) -> dict:
 
     # ── 第 3 步：高风险 → 创建工单 ──
     if human_required:
-        amount = order_result["data"]["total_price"]
-
         ticket_result = create_ticket(
             order_id=order_id,
             user_id=user_id,
             reason=reason or "用户未填写原因",
-            amount=amount,
-            risk_level=risk_level,
         )
 
         return {

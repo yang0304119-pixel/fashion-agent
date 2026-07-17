@@ -48,6 +48,13 @@ def risk_check(order_id: int, reason: str, user_id: int | None = None) -> dict:
                 "error": f"订单 {order_id} 不存在",
             }
 
+        if user_id is None or order.user_id != user_id:
+            return {
+                "success": False,
+                "data": None,
+                "error": "订单不存在或不属于当前用户",
+            }
+
         # ── 已退款订单不重复处理 ──
         if order.status == "refunded":
             return {
@@ -93,17 +100,17 @@ def risk_check(order_id: int, reason: str, user_id: int | None = None) -> dict:
         db.close()
 
 
-def create_ticket(order_id: int, user_id: int, reason: str,
-                  amount: Decimal, risk_level: str) -> dict:
+def create_ticket(
+    order_id: int,
+    user_id: int,
+    reason: str,
+) -> dict:
     """创建售后工单（退款/换货）。
 
     Args:
         order_id: 关联订单号。
         user_id: 用户 ID。
         reason: 退款原因。
-        amount: 退款金额。
-        risk_level: 风险等级（low/medium/high）。
-
     Returns:
         结构化结果 dict：
         - success: bool
@@ -112,16 +119,72 @@ def create_ticket(order_id: int, user_id: int, reason: str,
     """
     db = SessionLocal()
     try:
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            Order.user_id == user_id,
+        ).first()
+
+        if not order:
+            return {
+                "success": False,
+                "data": None,
+                "error": "订单不存在或不属于当前用户",
+            }
+
+        if order.status == "refunded":
+            return {
+                "success": False,
+                "data": None,
+                "error": f"订单 {order_id} 已完成退款",
+            }
+
+        verified_amount = Decimal(
+            str(order.total_price)
+        )
+        verified_risk_level = (
+            "high"
+            if verified_amount
+            > settings.REFUND_AUTO_LIMIT
+            else "low"
+        )
+
+        if verified_risk_level != "high":
+            return {
+                "success": False,
+                "data": None,
+                "error": (
+                    "低风险退款不创建人工工单，"
+                    "应由自动退款流程处理"
+                ),
+            }
+
+        existing_ticket = db.query(Ticket).filter(
+            Ticket.order_id == order_id,
+            Ticket.user_id == user_id,
+            Ticket.type == "refund",
+            Ticket.status == "pending",
+        ).first()
+
+        if existing_ticket:
+            return {
+                "success": True,
+                "data": {
+                    "ticket_id": existing_ticket.id,
+                    "status": existing_ticket.status,
+                },
+                "error": None,
+            }
+
         ticket = Ticket(
-            tenant_id=1,
+            tenant_id=order.tenant_id,
             order_id=order_id,
             user_id=user_id,
             type="refund",
             reason=reason,
-            amount=amount,
-            risk_level=risk_level,
+            amount=verified_amount,
+            risk_level=verified_risk_level,
             status="pending",
-            human_review=(risk_level != "low"),
+            human_review=True,
         )
         db.add(ticket)
         db.commit()

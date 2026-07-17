@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # ── RAG 配置（占位，Phase 2 启用） ──
     CHROMA_PATH: str = ""
     TOP_K: int = 3
+    DOCLING_ARTIFACTS_PATH: Path = Path(
+        r"D:\docling_models"
+    )
 
     # ── FastAPI ──
     HOST: str = "127.0.0.1"

@@ -1,86 +1,242 @@
-"""
-知识库文档加载器
-
-将 data/knowledge/ 下的 Markdown 知识文档加载为结构化 dict 列表。
-只加载 index.json 中登记的文档，不加载游离的 .md 文件。
-
-# 关键设计说明
-# ─────────────────────────────
-# 为什么以 index.json 为过滤依据：
-# - index.json 是知识库的"注册表"，登记了文档的类型、分类等 metadata
-# - 防止因目录中存在临时或废弃 .md 文件导致脏数据进入 RAG
-# - 为后续多租户场景预留：每个租户可有独立的 index.json
-# 权衡：
-# - 新增知识文档时需要同步更新 index.json（可接受的手动步骤）
-# - 严格模式：索引中有但文件缺失会报错，而不是静默忽略
-# ─────────────────────────────
-"""
-
-import json
+from collections.abc import Iterator
+from functools import lru_cache
+from hashlib import sha256
 from pathlib import Path
-from typing import Any
+
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+)
+from docling.document_converter import (
+    DocumentConverter,
+    PdfFormatOption,
+)
+from langchain_community.document_loaders import (
+    CSVLoader,
+    TextLoader,
+)
+from langchain_core.documents import Document
+from langchain_docling import DoclingLoader
+from langchain_docling.loader import ExportType
+
+from app.core.config import settings
+from app.rag.config import (
+    KNOWLEDGE_DIR,
+    MAX_KNOWLEDGE_FILE_BYTES,
+    SUPPORTED_SUFFIXES,
+)
+from app.rag.security import sanitize_document_content
 
 
-def load_knowledge(knowledge_dir: str | Path | None = None) -> list[dict[str, Any]]:
-    """加载知识库文档，返回结构化文档列表。
+TEXT_SUFFIXES = {".txt", ".md"}
+CSV_SUFFIXES = {".csv"}
 
-    读取 index.json 获取文档注册信息，然后逐个加载 .md 文件内容。
-    索引中登记的文件必须存在磁盘上，否则抛出 FileNotFoundError。
+DOCLING_SUFFIXES = {
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".html",
+    ".htm",
+}
 
-    Args:
-        knowledge_dir: 知识库目录路径。默认为项目 data/knowledge/。
 
-    Returns:
-        list[dict]，每项包含：
-        - id: 文档唯一标识（不含扩展名的文件名）
-        - title: 文档标题（来自 index.json）
-        - type: 文档类型（如 "商品知识" / "售后规则"）
-        - category: 文档分类（如 "通用"）
-        - content: 完整 Markdown 正文
+@lru_cache(maxsize=1)
+def get_docling_converter() -> DocumentConverter:
+    """创建只使用本地模型文件的 Docling 转换器。"""
 
-    Raises:
-        FileNotFoundError: index.json 不存在，或索引中登记的 .md 文件缺失
-        json.JSONDecodeError: index.json 格式错误
-    """
-    # ── 确定知识库目录 ──
-    if knowledge_dir is None:
-        knowledge_dir = Path(__file__).resolve().parent.parent.parent / "data" / "knowledge"
-    knowledge_dir = Path(knowledge_dir)
+    artifacts_path = (
+        settings.DOCLING_ARTIFACTS_PATH
+        .expanduser()
+        .resolve()
+    )
 
-    if not knowledge_dir.exists():
-        raise FileNotFoundError(f"知识库目录不存在: {knowledge_dir}")
+    if not artifacts_path.is_dir():
+        raise FileNotFoundError(
+            "Docling 本地模型目录不存在: "
+            f"{artifacts_path}"
+        )
 
-    # ── 加载 index.json ──
-    index_path = knowledge_dir / "index.json"
-    if not index_path.exists():
-        raise FileNotFoundError(f"知识库索引文件不存在: {index_path}")
+    pdf_options = PdfPipelineOptions(
+        artifacts_path=artifacts_path,
+    )
 
-    with open(index_path, "r", encoding="utf-8") as f:
-        index_data: dict = json.load(f)
+    return DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=pdf_options,
+            ),
+        },
+    )
 
-    documents: list[dict[str, Any]] = []
-    for doc_info in index_data.get("documents", []):
-        filename: str = doc_info.get("filename", "")
-        if not filename:
+
+def iter_knowledge_files(
+    root: Path = KNOWLEDGE_DIR,
+) -> Iterator[Path]:
+    """递归扫描所有支持的知识文件。"""
+
+    root = root.resolve()
+
+    if not root.is_dir():
+        raise FileNotFoundError(
+            f"知识库目录不存在: {root}"
+        )
+
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
             continue
 
-        file_path = knowledge_dir / filename
-        if not file_path.exists():
-            raise FileNotFoundError(
-                f"索引中登记的文档不存在: {file_path}（请检查 index.json 或补充文件）"
+        relative_path = path.relative_to(root)
+
+        if any(
+            (root / parent).is_symlink()
+            for parent in (
+                Path(*relative_path.parts[:index])
+                for index in range(
+                    1,
+                    len(relative_path.parts) + 1,
+                )
+            )
+        ):
+            continue
+
+        if path.name.startswith((".", "~$")):
+            continue
+
+        if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+            continue
+
+        if path.stat().st_size > MAX_KNOWLEDGE_FILE_BYTES:
+            raise ValueError(
+                "知识文件超过大小限制: "
+                f"{relative_path.as_posix()}"
             )
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        resolved_path = path.resolve(strict=True)
 
-        # 清理文件头 metadata 行（> 开头的引用行和空行前的元信息区域）
-        # 保留第一个标题（#）之后的内容作为正文，文件头 metadata 行自动被正文包含
-        documents.append({
-            "id": file_path.stem,  # 不含扩展名的文件名
-            "title": doc_info.get("title", ""),
-            "type": doc_info.get("type", ""),
-            "category": doc_info.get("category", ""),
-            "content": content,
-        })
+        try:
+            resolved_path.relative_to(root)
+        except ValueError as error:
+            raise ValueError(
+                "知识文件路径越界: "
+                f"{path}"
+            ) from error
 
-    return documents
+        yield resolved_path
+
+
+def create_loader(
+    path: Path,
+    root: Path = KNOWLEDGE_DIR,
+):
+    """根据文件扩展名创建 LangChain Loader。"""
+
+    root = root.resolve(strict=True)
+    path = path.resolve(strict=True)
+
+    try:
+        path.relative_to(root)
+    except ValueError as error:
+        raise ValueError(
+            f"拒绝加载知识库目录外的文件: {path}"
+        ) from error
+
+    suffix = path.suffix.lower()
+
+    if suffix in TEXT_SUFFIXES:
+        return TextLoader(
+            file_path=str(path),
+            encoding="utf-8",
+            autodetect_encoding=True,
+        )
+
+    if suffix in CSV_SUFFIXES:
+        return CSVLoader(
+            file_path=str(path),
+            encoding="utf-8-sig",
+            autodetect_encoding=True,
+        )
+
+    if suffix in DOCLING_SUFFIXES:
+        return DoclingLoader(
+            file_path=str(path),
+            converter=get_docling_converter(),
+            export_type=ExportType.MARKDOWN,
+        )
+
+    raise ValueError(f"不支持的文件格式: {suffix}")
+
+
+def lazy_load_knowledge(
+    root: Path = KNOWLEDGE_DIR,
+) -> Iterator[Document]:
+    """扫描目录并统一生成 LangChain Document。"""
+
+    root = root.resolve()
+
+    for file_path in iter_knowledge_files(root):
+        relative_path = file_path.relative_to(root)
+        directory_parts = relative_path.parts[:-1]
+
+        knowledge_type = (
+            directory_parts[0]
+            if len(directory_parts) >= 1
+            else "未分类"
+        )
+
+        category = (
+            directory_parts[1]
+            if len(directory_parts) >= 2
+            else "通用"
+        )
+
+        source_key = relative_path.as_posix()
+        doc_id = sha256(
+            source_key.encode("utf-8")
+        ).hexdigest()[:16]
+
+        source_sha256 = sha256(
+            file_path.read_bytes()
+        ).hexdigest()
+        loader = create_loader(
+            file_path,
+            root=root,
+        )
+
+        for document in loader.lazy_load():
+            sanitized = sanitize_document_content(
+                document.page_content
+            )
+
+            if not sanitized.text:
+                continue
+
+            document.page_content = sanitized.text
+            document.metadata.update({
+                "doc_id": doc_id,
+                "title": file_path.stem,
+                "type": knowledge_type,
+                "category": category,
+                "source": str(file_path),
+                "relative_source": source_key,
+                "file_name": file_path.name,
+                "source_sha256": source_sha256,
+                "sanitized_instruction_lines": (
+                    sanitized.removed_instruction_lines
+                ),
+                "sanitized_control_characters": (
+                    sanitized.removed_control_characters
+                ),
+                "file_type": (
+                    file_path.suffix
+                    .lower()
+                    .removeprefix(".")
+                ),
+            })
+
+            yield document
+
+
+def load_knowledge(
+    root: Path = KNOWLEDGE_DIR,
+) -> list[Document]:
+    return list(lazy_load_knowledge(root))

@@ -102,21 +102,15 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "create_ticket",
-            "description": "创建售后工单。只有在 risk_check 返回 human_required=true 时才调用。调用前先确认用户身份和订单信息。",
+            "description": "创建售后工单。工具会重新校验订单归属、真实金额和风险等级；只有高风险订单可创建人工工单。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "order_id": {"type": "integer", "description": "订单号"},
                     "user_id": {"type": "integer", "description": "用户 ID"},
                     "reason": {"type": "string", "description": "退款原因"},
-                    "amount": {"type": "number", "description": "退款金额，从 query_order 结果中获取"},
-                    "risk_level": {
-                        "type": "string",
-                        "enum": ["low", "medium", "high"],
-                        "description": "风险等级，从 risk_check 结果中获取",
-                    },
                 },
-                "required": ["order_id", "user_id", "reason", "amount", "risk_level"],
+                "required": ["order_id", "user_id", "reason"],
             },
         },
     },

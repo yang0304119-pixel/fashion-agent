@@ -35,4 +35,5 @@ def chat(request: ChatRequest) -> ChatResponse:
         intent=result.get("intent", "fallback"),
         confidence=result.get("confidence", 0.0),
         answer=result.get("final_answer", ""),
+        sources=result.get("retrieved_sources", []),
     )

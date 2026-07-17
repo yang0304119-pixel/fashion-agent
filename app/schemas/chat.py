@@ -2,7 +2,17 @@
 聊天接口请求/响应模型
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class RagSource(BaseModel):
+    id: str
+    title: str
+    type: str
+    category: str
+    relative_source: str
+    chunk_id: str
+    source_sha256: str
 
 
 class ChatRequest(BaseModel):
@@ -18,3 +28,6 @@ class ChatResponse(BaseModel):
     intent: str
     confidence: float
     answer: str
+    sources: list[RagSource] = Field(
+        default_factory=list
+    )
