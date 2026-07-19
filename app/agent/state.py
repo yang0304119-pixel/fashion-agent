@@ -16,7 +16,7 @@ Phase 3 只用到当前字段，其余在后续 Phase 逐步追加。
 # ─────────────────────────────
 """
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class AgentState(TypedDict):
@@ -29,12 +29,17 @@ class AgentState(TypedDict):
     # ── 基础信息 ──
     session_id: str
     user_id: int
+    tenant_id: int
     message: str
+    trace_id: int | None
 
     # ── 路由结果（Phase 3 核心） ──
-    intent: str                 # knowledge_query / size_recommend / order_query / refund_request / fallback
+    intent: str                 # knowledge/order/inventory/size/refund/composite/fallback
     confidence: float           # 0~1
     missing_slots: list[str]    # 需要的参数缺失（如订单号、身高体重）
+    pending_intent: str | None  # 上一轮等待补参的确定性业务意图
+    collected_slots: dict       # 当前会话已经收集并验证的槽位
+    chat_context: dict[str, Any] | None  # 服务端重新查询后的可信卡片上下文
 
     # ── RAG 检索结果（Phase 2） ──
     retrieved_docs: list[str]
@@ -52,6 +57,11 @@ class AgentState(TypedDict):
     # ── 退款流程（Phase 5） ──
     risk_level: str                   # low / medium / high
     human_required: bool              # 是否需要人工审核
+    refund_request_id: int
+    refund_status: str
+
+    # ── 固定Fallback是否已成功处理问候/致谢等闲聊 ──
+    fallback_handled: bool
 
     # ── 最终回复 ──
     final_answer: str

@@ -12,8 +12,7 @@
 # - tools 参数让 LLM 在不确定时选择"不调用"直接回答，不会硬猜参数
 # 权衡：
 # - 依赖 LLM 的 function calling 能力（当前模型支持良好）
-# - 多步编排（如退款三步）交给 LLM 决策，结果不可 100% 确定
-# - 通过工具描述中的"前置条件"提示（如"先调用 risk_check"）引导 LLM
+# - 这里只注册只读或低风险工具；退款等资金操作由确定性工作流处理
 # ─────────────────────────────
 """
 
@@ -22,7 +21,7 @@ from typing import Any
 from app.tools.order_tool import query_order
 from app.tools.size_tool import size_recommend
 from app.tools.inventory_tool import query_inventory
-from app.tools.refund_tool import risk_check, create_ticket
+from app.tools.product_search_tool import search_products
 
 
 # ── OpenAI function-calling 格式的工具定义 ──
@@ -69,13 +68,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_inventory",
-            "description": "查询商品库存数量。用户问「有货吗」「有现货吗」「库存」时调用。",
+            "description": (
+                "按商品ID查询库存数量。若用户只提供商品名称，"
+                "必须先调用 search_products 获取当前租户内的商品ID。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "product_id": {
                         "type": "integer",
-                        "description": "商品 ID：1=极寒加厚羽绒服, 2=轻薄都市羽绒服, 3=三合一冲锋羽绒服, 4=商务修身羽绒服, 5=连帽短款羽绒服, 6=加长保暖羽绒服, 7=纯色羊毛围巾",
+                        "description": "search_products 返回的商品 ID",
                     },
                 },
                 "required": ["product_id"],
@@ -85,32 +87,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "risk_check",
-            "description": "判断退款风险等级。调用前必须先调用 query_order 确认订单信息。金额≤100 元自动审批，>100 元需人工审核。同时校验订单归属和重复退款。",
+            "name": "search_products",
+            "description": "按名称、分类、描述或材质搜索商品目录，只读取商品信息。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "order_id": {"type": "integer", "description": "订单号"},
-                    "reason": {"type": "string", "description": "退款原因"},
-                    "user_id": {"type": "integer", "description": "用户 ID，从上下文中的当前用户 ID 获取"},
+                    "query": {
+                        "type": "string",
+                        "description": "商品名称或关键词，如 围巾、羊毛、羽绒服",
+                    },
                 },
-                "required": ["order_id", "reason", "user_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_ticket",
-            "description": "创建售后工单。工具会重新校验订单归属、真实金额和风险等级；只有高风险订单可创建人工工单。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "order_id": {"type": "integer", "description": "订单号"},
-                    "user_id": {"type": "integer", "description": "用户 ID"},
-                    "reason": {"type": "string", "description": "退款原因"},
-                },
-                "required": ["order_id", "user_id", "reason"],
+                "required": ["query"],
             },
         },
     },
@@ -123,6 +110,5 @@ TOOL_HANDLERS: dict[str, Any] = {
     "query_order": query_order,
     "size_recommend": size_recommend,
     "query_inventory": query_inventory,
-    "risk_check": risk_check,
-    "create_ticket": create_ticket,
+    "search_products": search_products,
 }

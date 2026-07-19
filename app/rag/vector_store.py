@@ -2,7 +2,6 @@ import logging
 import os
 from datetime import UTC, datetime
 from functools import lru_cache
-from pathlib import Path
 from uuid import uuid4
 
 import chromadb

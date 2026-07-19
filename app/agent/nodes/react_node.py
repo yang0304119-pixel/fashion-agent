@@ -2,14 +2,13 @@
 ReAct 循环节点
 
 LLM 自主决策：调用工具 → 结果反馈给 LLM → 再决策 → 直到生成最终回答。
-替代 Phase 4 tool_node（硬编码调度）和 Phase 5 refund_node（硬编码编排）。
+只处理组合型只读问题；退款由独立确定性工作流处理。
 
 # 关键设计说明
 # ─────────────────────────────
-# 为什么引入 ReAct 而非继续用 Python 编排：
-# - 原来 tool_node + refund_node 本质是 if-else 调用链，新增工具要改代码
-# - ReAct 下 LLM 根据工具描述自主选择参数和调用顺序，新增工具只注册一行
-# - 退款三步（查单→风险判断→建工单）由 LLM 根据中间结果动态决策
+# ReAct 的使用边界：
+# - 仅组合订单查询、库存查询、尺码推荐、商品目录搜索
+# - 退款等资金业务必须进入确定性工作流
 # 为什么限定最大迭代次数：
 # - 防止 LLM 陷入循环或无限调用工具
 # - 超限后返回兜底提示，不影响用户体验
@@ -23,7 +22,10 @@ from openai import OpenAI
 
 from app.agent.state import AgentState
 from app.core.config import settings
-from app.tools._registry import TOOL_DEFINITIONS, TOOL_HANDLERS
+from app.tools._registry import (
+    TOOL_DEFINITIONS,
+    TOOL_HANDLERS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,21 +36,24 @@ def react_node(state: AgentState) -> dict:
     """ReAct 循环：LLM 选择工具 → 执行 → 反馈 → 再决策 → 回答。
 
     Args:
-        state: 当前 AgentState，至少包含 message 和 user_id。
+        state: 当前 AgentState，至少包含 message、user_id 和 tenant_id。
 
     Returns:
         更新 state 的字典，包含 final_answer。
     """
     message: str = state.get("message", "").strip()
     user_id: int = state.get("user_id", 0)
+    tenant_id: int = state.get("tenant_id", 0)
 
     if not message:
         return {"final_answer": "您好，请问有什么可以帮您的？"}
 
     # ── 系统 prompt ──
     system_prompt = (
-        f"你是一个服装电商客服助手。当前用户 ID 为 {user_id}。\n\n"
-        "你可以使用以下工具帮助用户。当用户的问题需要查询数据或执行业务操作时，"
+        "你是一个只处理组合型只读问题的服装电商客服助手。"
+        "用户身份已由服务端认证，"
+        "不要向用户索取或自行生成 user_id、tenant_id。\n\n"
+        "你只能使用以下只读工具帮助用户查询数据，"
         "选择正确的工具并传入参数。\n"
         "每次只调用一个工具，等待返回结果后再决定下一步。\n"
         "当已经获取足够信息时，直接给用户最终回答。\n\n"
@@ -57,8 +62,8 @@ def react_node(state: AgentState) -> dict:
         "注意：\n"
         "- 工具参数必须从用户消息中提取，不要编造\n"
         "- 如果用户缺少必要信息（如未提供订单号），先询问用户补充\n"
-        "- 退款流程分三步：先 query_order 查订单 → 再 risk_check 判断风险 "
-        "→ 高风险时 create_ticket 创建工单\n"
+        "- 禁止退款、建工单、修改订单或库存等任何写操作\n"
+        "- 不得声称已经执行资金操作或状态修改\n"
         "- 回答简洁自然，像客服在和用户对话"
     )
 
@@ -104,6 +109,9 @@ def react_node(state: AgentState) -> dict:
             continue
 
         # ── LLM 选择调用工具 ──
+        # 一条assistant消息可能包含多个tool_call，只能追加一次；随后为每个
+        # tool_call分别追加结果，保持OpenAI消息协议结构合法。
+        messages.append(assistant_msg)
         for tool_call in assistant_msg.tool_calls:
             func_name = tool_call.function.name
             try:
@@ -111,10 +119,7 @@ def react_node(state: AgentState) -> dict:
             except json.JSONDecodeError:
                 args = {}
 
-            logger.info(
-                "ReAct 调用工具: %s, 参数: %s (第 %d 轮)",
-                func_name, args, iteration + 1,
-            )
+            logger.info("ReAct 调用工具: %s (第 %d 轮)", func_name, iteration + 1)
 
             # 执行工具
             handler = TOOL_HANDLERS.get(func_name)
@@ -122,12 +127,23 @@ def react_node(state: AgentState) -> dict:
                 result = {"success": False, "error": f"未知工具：{func_name}"}
             else:
                 try:
-                    result = handler(**args)
-                except Exception as e:
-                    result = {"success": False, "error": f"工具执行异常：{str(e)}"}
+                    trusted_args = dict(args)
+                    if func_name in {
+                        "query_order",
+                    }:
+                        trusted_args["user_id"] = user_id
+                    if func_name in {
+                        "query_order",
+                        "query_inventory",
+                        "search_products",
+                    }:
+                        trusted_args["tenant_id"] = tenant_id
+                    result = handler(**trusted_args)
+                except Exception:
+                    logger.exception("ReAct 工具执行异常: %s", func_name)
+                    result = {"success": False, "error": "工具执行暂时失败，请稍后重试"}
 
-            # 将 assistant 消息（含 tool_call）和工具结果追加到历史
-            messages.append(assistant_msg)
+            # 将工具结果追加到历史
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,

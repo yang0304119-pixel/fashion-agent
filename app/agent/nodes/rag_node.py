@@ -33,6 +33,13 @@ def rag_node(state: AgentState) -> dict:
     """调用 RAG 服务并将结果映射到 AgentState。"""
 
     message: str = state.get("message", "").strip()
+    context = state.get("chat_context") or {}
+    if context.get("context_type") == "product":
+        message = (
+            f"当前咨询商品：{context.get('product_name', '')}"
+            f"（商品编号 {context.get('product_id', '')}）。"
+            f"用户问题：{message}"
+        )
 
     try:
         result = answer_question(message)

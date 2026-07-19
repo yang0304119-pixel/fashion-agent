@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FashionAgent AI 客服运营台">
+  <title>AI 客服运营台 · FashionAgent</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="admin-page">
+  <div class="demo-banner" role="note">
+    <strong>演示环境</strong><span>模拟退款</span><span>不涉及真实资金</span>
+  </div>
+  <div class="admin-shell hidden" id="adminPanel">
+    <aside class="admin-sidebar">
+      <a class="brand admin-brand" href="/admin.html">
+        <span class="brand-mark small" aria-hidden="true">FA</span>
+        <span>
+          <strong>FashionAgent</strong>
+          <small>AI 客服运营台</small>
+        </span>
+      </a>
+      <nav class="admin-nav" aria-label="AI 客服运营台导航">
+        <a class="active" href="#dashboard" data-admin-view="dashboard"><span>⌂</span>总览</a>
+        <a href="#orders" data-admin-view="orders"><span>▦</span>业务上下文</a>
+        <a href="#refunds" data-admin-view="refunds"><span>↗</span>高风险操作审核</a>
+        <a href="#tickets" data-admin-view="tickets"><span>▤</span>人工接管与工单</a>
+        <a href="#traces" data-admin-view="traces"><span>⌁</span>执行轨迹</a>
+        <a href="#cases" data-admin-view="cases"><span>◇</span>未解决案例</a>
+      </nav>
+      <div class="admin-account">
+        <span id="adminIdentity"></span>
+        <button class="button sidebar-button" id="adminLogoutBtn" type="button">退出登录</button>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-heading" id="adminPageHeading">
+        <div>
+          <p class="eyebrow">OPERATIONS OVERVIEW</p>
+          <h1>运营总览</h1>
+          <p>查看当前租户的客服业务和待办事项。</p>
+        </div>
+        <button class="button secondary" id="refreshRefundsBtn" type="button">刷新总览</button>
+      </header>
+
+      <div data-admin-panel="dashboard">
+        <section class="dashboard-grid" aria-label="AI 客服运营指标">
+          <a class="dashboard-card actionable" href="#orders">
+            <span class="dashboard-card-label">业务上下文记录</span>
+            <strong id="dashboardOrdersTotal">—</strong>
+            <p>来自 Mock 外部业务系统的只读订单</p>
+          </a>
+          <a class="dashboard-card actionable" href="#refunds" data-dashboard-refund-status="reviewing">
+            <span class="dashboard-card-label">待审高风险请求</span>
+            <strong id="dashboardPendingRefunds">—</strong>
+            <p>等待授权人员批准或拒绝</p>
+          </a>
+          <a class="dashboard-card actionable warning" href="#refunds" data-dashboard-refund-status="failed">
+            <span class="dashboard-card-label">业务执行失败</span>
+            <strong id="dashboardFailedRefunds">—</strong>
+            <p>需要排查或重新处理</p>
+          </a>
+          <a class="dashboard-card actionable" href="#tickets">
+            <span class="dashboard-card-label">待处理工单</span>
+            <strong id="dashboardPendingTickets">—</strong>
+            <p>尚未完成审核的售后事项</p>
+          </a>
+          <a class="dashboard-card actionable" href="#cases">
+            <span class="dashboard-card-label">未解决案例</span>
+            <strong id="dashboardUnresolvedCases">—</strong>
+            <p>等待人工标注和质量复核</p>
+          </a>
+          <a class="dashboard-card actionable" href="#traces">
+            <span class="dashboard-card-label">今日会话量</span>
+            <strong id="dashboardTodaySessions">—</strong>
+            <p>北京时间今日去重会话数</p>
+          </a>
+        </section>
+        <section class="dashboard-note">
+          <div>
+            <p class="eyebrow">TODAY'S FOCUS</p>
+            <h2>优先处理高风险请求、人工接管和未解决案例</h2>
+          </div>
+          <p>总览数字均限定在当前租户内，点击指标卡可进入对应工作区。</p>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="orders">
+        <section class="ticket-toolbar">
+          <div class="filter-row">
+            <label class="filter-control">业务状态
+              <select id="adminOrderStatusFilter">
+                <option value="">全部状态</option>
+                <option value="pending">待发货</option>
+                <option value="shipped">已发货</option>
+                <option value="delivered">已签收</option>
+                <option value="refunded">已退款</option>
+                <option value="cancelled">已取消</option>
+              </select>
+            </label>
+          </div>
+          <p>只读查看现有业务系统中的用户订单上下文，并追踪关联高风险请求与人工工单。</p>
+        </section>
+        <div id="adminOrdersContent"></div>
+        <div class="pagination" id="adminOrdersPagination"></div>
+      </div>
+
+      <div class="hidden" data-admin-panel="refunds">
+        <section class="metric-strip" aria-label="高风险操作状态筛选">
+          <button class="metric-tab active" type="button" data-status="reviewing">
+            <span>待审核</span><strong id="count-reviewing">—</strong>
+          </button>
+          <button class="metric-tab" type="button" data-status="approved">
+            <span>已批准</span><strong id="count-approved">—</strong>
+          </button>
+          <button class="metric-tab" type="button" data-status="succeeded">
+            <span>已成功</span><strong id="count-succeeded">—</strong>
+          </button>
+          <button class="metric-tab" type="button" data-status="rejected">
+            <span>已拒绝</span><strong id="count-rejected">—</strong>
+          </button>
+          <button class="metric-tab" type="button" data-status="failed">
+            <span>渠道失败</span><strong id="count-failed">—</strong>
+          </button>
+        </section>
+
+        <section aria-labelledby="currentStatusTitle">
+          <div class="table-heading">
+            <div>
+              <h2 id="currentStatusTitle">待审核申请</h2>
+              <p id="currentStatusDescription">需要授权人员作出批准或拒绝决定。</p>
+            </div>
+          </div>
+          <div id="adminRefundsContent"></div>
+          <div class="pagination" id="adminRefundsPagination"></div>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="tickets">
+        <section class="ticket-toolbar">
+          <div class="filter-row">
+            <label class="filter-control">工单状态
+              <select id="adminTicketStatusFilter">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+              </select>
+            </label>
+            <label class="filter-control">工单类型
+              <select id="adminTicketTypeFilter">
+                <option value="">全部类型</option>
+                <option value="refund">退款</option>
+                <option value="exchange">换货</option>
+              </select>
+            </label>
+          </div>
+          <p>退款等高风险请求仍在高风险操作审核中处理，本页面只展示人工接管、关联信息和审核结果。</p>
+        </section>
+        <div id="adminTicketsContent"></div>
+        <div class="pagination" id="adminTicketsPagination"></div>
+      </div>
+
+      <div class="hidden" data-admin-panel="traces">
+        <section class="trace-toolbar">
+          <form id="traceSearchForm">
+            <label for="traceSessionSearch">Session ID</label>
+            <input id="traceSessionSearch" maxlength="50" placeholder="输入完整 session_id 查询">
+            <button class="button primary" type="submit">查询</button>
+            <button class="button secondary" id="clearTraceSearchBtn" type="button">清除</button>
+          </form>
+          <div class="filter-row">
+            <label class="filter-control">识别意图
+              <select id="traceIntentFilter">
+                <option value="">全部意图</option>
+                <option value="knowledge_query">知识咨询</option>
+                <option value="order_query">订单查询</option>
+                <option value="inventory_query">库存查询</option>
+                <option value="size_recommend">尺码推荐</option>
+                <option value="refund_request">退款申请</option>
+                <option value="composite_query">组合查询</option>
+                <option value="fallback">Fallback</option>
+              </select>
+            </label>
+            <label class="filter-control">执行状态
+              <select id="traceStatusFilter">
+                <option value="">全部状态</option>
+                <option value="running">运行中</option>
+                <option value="succeeded">成功</option>
+                <option value="pending">待补参数</option>
+                <option value="failed">失败</option>
+              </select>
+            </label>
+          </div>
+        </section>
+        <section class="trace-workspace">
+          <aside class="trace-pane sessions-pane">
+            <div class="pane-heading"><strong>会话</strong><span id="traceSessionCount">0</span></div>
+            <div id="traceSessions"></div>
+          </aside>
+          <section class="trace-pane timeline-pane">
+            <div class="pane-heading"><strong>请求时间线</strong><span id="selectedSessionLabel">请选择会话</span></div>
+            <div id="traceTimeline"></div>
+            <div class="pagination compact-pagination" id="tracesPagination"></div>
+          </section>
+          <aside class="trace-pane detail-pane">
+            <div class="pane-heading"><strong>执行详情</strong><span id="selectedTraceLabel">请选择请求</span></div>
+            <div id="traceDetail"></div>
+          </aside>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="cases">
+        <section class="case-metrics" aria-label="未解决案例统计">
+          <article><span>待处理</span><strong id="caseCountPending">—</strong></article>
+          <article><span>已处理</span><strong id="caseCountResolved">—</strong></article>
+          <article><span>知识库候选</span><strong id="caseCountKnowledge">—</strong></article>
+        </section>
+        <section class="ticket-toolbar case-toolbar">
+          <div class="filter-row">
+            <label class="filter-control">处理状态
+              <select id="caseResolvedFilter">
+                <option value="">全部状态</option>
+                <option value="false">待处理</option>
+                <option value="true">已处理</option>
+              </select>
+            </label>
+            <label class="filter-control">预测意图
+              <select id="caseIntentFilter">
+                <option value="">全部意图</option>
+                <option value="knowledge_query">知识咨询</option>
+                <option value="order_query">订单查询</option>
+                <option value="inventory_query">库存查询</option>
+                <option value="size_recommend">尺码推荐</option>
+                <option value="refund_request">退款申请</option>
+                <option value="composite_query">组合查询</option>
+                <option value="fallback">Fallback</option>
+              </select>
+            </label>
+            <label class="filter-control">知识库候选
+              <select id="caseKnowledgeFilter">
+                <option value="">全部</option>
+                <option value="true">需要加入</option>
+                <option value="false">无需加入</option>
+              </select>
+            </label>
+          </div>
+          <p>候选标记不会直接写入 Chroma，仍需后续复核和知识发布流程。</p>
+        </section>
+        <div id="adminCasesContent"></div>
+        <div class="pagination" id="adminCasesPagination"></div>
+      </div>
+    </main>
+  </div>
+
+  <main class="admin-guard" id="adminGuard">
+    <div class="brand-mark" aria-hidden="true">FA</div>
+    <h1>正在验证管理员身份</h1>
+    <p>请稍候，系统正在确认您的工作台权限。</p>
+  </main>
+
+  <dialog class="detail-dialog admin-detail-dialog" id="refundDetailDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">REFUND DETAIL</p>
+        <h2>退款申请详情</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="refundDetailDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="adminRefundDetail"></div>
+  </dialog>
+
+  <dialog class="detail-dialog admin-detail-dialog" id="ticketDetailDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">TICKET DETAIL</p>
+        <h2>工单详情</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="ticketDetailDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="adminTicketDetail"></div>
+  </dialog>
+
+  <dialog class="detail-dialog" id="adminOrderDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">ORDER DETAIL</p>
+        <h2>订单详情</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="adminOrderDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="adminOrderDetail"></div>
+  </dialog>
+
+  <dialog class="confirm-dialog" id="approveDialog">
+    <form method="dialog" id="approveForm">
+      <span class="dialog-symbol warning-symbol">!</span>
+      <h2>确认批准退款？</h2>
+      <p id="approveWarning"></p>
+      <div class="confirm-summary" id="approveSummary"></div>
+      <div class="dialog-actions">
+        <button class="button secondary" value="cancel" type="submit">取消</button>
+        <button class="button primary" id="confirmApproveBtn" value="default" type="button">确认批准</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="confirm-dialog" id="rejectDialog">
+    <form id="rejectForm">
+      <span class="dialog-symbol danger-symbol">×</span>
+      <h2>拒绝退款申请</h2>
+      <p>拒绝后该申请不能再次批准，请填写清晰的拒绝原因。</p>
+      <label for="rejectReason">拒绝原因</label>
+      <textarea id="rejectReason" maxlength="500" required placeholder="例如：订单已超过退款期限"></textarea>
+      <p class="form-error" id="rejectError" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancelRejectBtn" type="button">取消</button>
+        <button class="button danger" id="confirmRejectBtn" type="submit">确认拒绝</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="detail-dialog case-dialog" id="caseDetailDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">HUMAN LABELING</p>
+        <h2>案例人工标注</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="caseDetailDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <form id="caseAnnotationForm">
+      <div id="caseReadonlyDetail"></div>
+      <div class="case-form-fields">
+        <label>人工正确意图
+          <select id="caseHumanIntent">
+            <option value="">请选择意图</option>
+            <option value="knowledge_query">知识咨询</option>
+            <option value="order_query">订单查询</option>
+            <option value="inventory_query">库存查询</option>
+            <option value="size_recommend">尺码推荐</option>
+            <option value="refund_request">退款申请</option>
+            <option value="composite_query">组合查询</option>
+            <option value="fallback">Fallback</option>
+          </select>
+        </label>
+        <label>人工正确答案
+          <textarea id="caseHumanAnswer" maxlength="4000" placeholder="填写复核后的正确答案"></textarea>
+        </label>
+        <label class="checkbox-row">
+          <input id="caseShouldAddToKb" type="checkbox">
+          <span>标记为知识库候选</span>
+        </label>
+        <label class="checkbox-row">
+          <input id="caseIsResolved" type="checkbox">
+          <span>标记为已处理</span>
+        </label>
+        <p class="form-error" id="caseFormError" role="alert"></p>
+      </div>
+      <div class="dialog-actions case-dialog-actions">
+        <button class="button secondary" id="cancelCaseAnnotationBtn" type="button">取消</button>
+        <button class="button primary" id="saveCaseAnnotationBtn" type="submit">保存标注</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast hidden" id="adminToast" role="status"></div>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

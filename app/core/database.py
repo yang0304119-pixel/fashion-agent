@@ -8,7 +8,7 @@
 # ─────────────────────────────
 # 为什么开发阶段用 init_db() 而非 Alembic：
 # - Phase 1~7 表结构频繁变动，手写 migration 增加 3 倍工作量
-# - init_db() 基于模型定义自动建表/加列，不会丢数据（只会加不会删）
+# - create_all() 负责新表，已有SQLite表的增量字段由幂等迁移脚本处理
 # - 生产准备阶段再引入 Alembic 做真实 migration
 # 为什么用 check_same_thread=False：
 # - FastAPI 多线程处理请求，SQLite 默认只允许创建线程访问
@@ -17,6 +17,7 @@
 """
 
 import logging
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -52,20 +53,21 @@ def init_db():
     """
     # 延迟导入确保所有模型注册到 Base.metadata
     from app.models import (  # noqa: F401
-        Tenant, User, Product, Order, Ticket, AgentTrace, UnresolvedCase,
+        Tenant, User, Product, Order, Ticket, RefundRequest,
+        AgentTrace, AgentTraceStep, UnresolvedCase, ConversationState,
     )
 
     Base.metadata.create_all(bind=engine)
+    if engine.dialect.name == "sqlite":
+        database_path = engine.url.database
+        if database_path and database_path != ":memory:":
+            from scripts.migrate_agent_trace_steps import migrate as migrate_trace
+            from scripts.migrate_ticket_review import migrate as migrate_ticket
+            from scripts.migrate_unresolved_case_review import (
+                migrate as migrate_unresolved_case,
+            )
+
+            migrate_ticket(Path(database_path))
+            migrate_trace(Path(database_path))
+            migrate_unresolved_case(Path(database_path))
     logger.info("数据库表结构已就绪 - %s", settings.resolved_database_url)
-
-
-def get_db():
-    """FastAPI 依赖注入：提供数据库会话
-
-    使用 Generator 确保会话在请求结束后自动关闭。
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

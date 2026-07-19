@@ -13,9 +13,8 @@
 # ─────────────────────────────
 """
 
-from decimal import Decimal
-
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -25,6 +24,8 @@ class UnresolvedCase(Base):
     __tablename__ = "unresolved_case"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
     user_message = Column(Text, nullable=False, comment="用户原始输入")
     predicted_intent = Column(String(50), nullable=True, comment="系统预测意图")
     confidence = Column(Numeric(5, 4), nullable=True, comment="路由置信度")
@@ -34,7 +35,24 @@ class UnresolvedCase(Base):
     human_label_intent = Column(String(50), nullable=True, comment="人工标注的正确意图")
     human_label_answer = Column(Text, nullable=True, comment="人工修正的答案")
     should_add_to_kb = Column(Boolean, default=False, comment="是否需要补充知识库")
+    reviewed_by = Column(
+        Integer,
+        ForeignKey("user.id"),
+        nullable=True,
+        index=True,
+        comment="标注管理员 ID",
+    )
+    reviewed_at = Column(DateTime, nullable=True, comment="人工标注时间")
+    updated_at = Column(
+        DateTime,
+        nullable=True,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="最后更新时间",
+    )
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="记录时间")
+
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
 
     def __repr__(self) -> str:
         return f"<UnresolvedCase(id={self.id}, predicted={self.predicted_intent})>"

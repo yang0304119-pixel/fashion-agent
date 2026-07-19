@@ -1,7 +1,7 @@
 import logging
 
 from app.rag.embeddings import get_embeddings
-from app.rag.loader import load_knowledge
+from app.rag.processed_loader import load_approved_knowledge
 from app.rag.text_splitter import split_knowledge_documents
 from app.rag.vector_store import (
     rebuild_vector_store,
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def build_index() -> int:
-    logger.info("开始扫描知识库")
+    logger.info("开始扫描已审核的processed知识库")
 
-    documents = load_knowledge()
+    documents = load_approved_knowledge()
 
     if not documents:
         raise RuntimeError("知识库目录中没有可用文件")

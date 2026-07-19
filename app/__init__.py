@@ -1,3 +1,3 @@
 """
-FashionAgent - 服装电商智能客服 Agent
+FashionAgent - 电商 AI 客服自动化与辅助系统
 """

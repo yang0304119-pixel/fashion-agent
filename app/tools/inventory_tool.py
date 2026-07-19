@@ -11,15 +11,22 @@
 # ─────────────────────────────
 """
 
-from app.core.database import SessionLocal
-from app.models.product import Product
+from app.providers.factory import get_inventory_provider
+from app.providers.inventory_provider import InventoryNotFoundError, InventoryProvider
 
 
-def query_inventory(product_id: int) -> dict:
+def query_inventory(
+    product_id: int,
+    *,
+    tenant_id: int,
+    provider: InventoryProvider | None = None,
+) -> dict:
     """查询商品库存信息。
 
     Args:
         product_id: 商品 ID。
+        tenant_id: 服务端认证得到的租户 ID。
+        provider: 可选的库存系统 Provider，测试时可注入 Fake。
 
     Returns:
         结构化结果 dict：
@@ -27,37 +34,35 @@ def query_inventory(product_id: int) -> dict:
         - data: {product_id, name, stock, colors, sizes} | None
         - error: str | None
     """
-    db = SessionLocal()
     try:
-        product = db.query(Product).filter(Product.id == product_id).first()
-
-        if not product:
-            return {
-                "success": False,
-                "data": None,
-                "error": f"商品 {product_id} 不存在",
-            }
+        inventory = (provider or get_inventory_provider()).get_inventory(
+            tenant_id=tenant_id,
+            product_id=product_id,
+        )
 
         return {
             "success": True,
             "data": {
-                "product_id": product.id,
-                "name": product.name,
-                "category": product.category,
-                "price": float(product.price),
-                "stock": product.stock,
-                "colors": product.colors,
-                "sizes": product.sizes,
+                "product_id": inventory.product_id,
+                "name": inventory.product_name,
+                "category": inventory.category,
+                "price": inventory.price,
+                "stock": inventory.stock,
+                "colors": inventory.colors,
+                "sizes": inventory.sizes,
             },
             "error": None,
         }
 
-    except Exception as e:
+    except InventoryNotFoundError as error:
         return {
             "success": False,
             "data": None,
-            "error": f"查询库存失败：{str(e)}",
+            "error": str(error),
         }
-
-    finally:
-        db.close()
+    except Exception:
+        return {
+            "success": False,
+            "data": None,
+            "error": "库存查询暂时失败，请稍后重试",
+        }

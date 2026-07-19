@@ -1,7 +1,7 @@
 """
 种子数据脚本
 
-向数据库填充初始数据：3 个测试用户 + 6 款男装羽绒服 + 6 个订单。
+向数据库填充初始数据：3 个顾客 + 1 个管理员 + 7 款商品 + 7 个订单。
 幂等运行——库中已有数据时自动跳过。
 
 用法：
@@ -20,6 +20,8 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.core.database import init_db, SessionLocal
+from app.core.config import settings
+from app.core.passwords import hash_password
 from app.models import Tenant, User, Product, Order
 
 logger = logging.getLogger(__name__)
@@ -33,9 +35,10 @@ TENANTS = [
 ]
 
 USERS = [
-    {"id": 1, "username": "张三"},
-    {"id": 2, "username": "李四"},
-    {"id": 3, "username": "王五"},
+    {"id": 1, "tenant_id": 1, "username": "张三", "role": "customer"},
+    {"id": 2, "tenant_id": 1, "username": "李四", "role": "customer"},
+    {"id": 3, "tenant_id": 1, "username": "王五", "role": "customer"},
+    {"id": 4, "tenant_id": 1, "username": "admin", "role": "admin"},
 ]
 
 # tenant_id=1 关联到默认测试店铺
@@ -146,11 +149,23 @@ ORDERS = [
     {"id": 10007, "tenant_id": 1, "user_id": 1, "product_id": 7, "quantity": 1, "total_price": 89.00, "status": "pending"},
 ]
 
+DEMO_REFUND_SCENARIOS = {
+    10007: "小额模拟退款成功",
+    10001: "大额进入人工审核后模拟成功",
+    10002: "大额进入人工审核后模拟渠道失败",
+}
+
 
 # ── 执行逻辑 ──────────────────────────────────────────────
 
 def seed_database():
     """初始化数据库并填充种子数据。幂等——已有数据时跳过。"""
+    if not settings.SEED_CUSTOMER_PASSWORD or not settings.SEED_ADMIN_PASSWORD:
+        raise RuntimeError(
+            "初始化账号前必须设置 SEED_CUSTOMER_PASSWORD 和 "
+            "SEED_ADMIN_PASSWORD"
+        )
+
     init_db()
     db = SessionLocal()
     try:
@@ -167,7 +182,18 @@ def seed_database():
 
         print("[INFO] 正在插入用户数据...")
         for user_data in USERS:
-            db.add(User(**user_data))
+            password = (
+                settings.SEED_ADMIN_PASSWORD
+                if user_data["role"] == "admin"
+                else settings.SEED_CUSTOMER_PASSWORD
+            )
+            db.add(
+                User(
+                    **user_data,
+                    password_hash=hash_password(password),
+                    is_active=True,
+                )
+            )
         db.flush()
 
         print("[INFO] 正在插入商品数据...")
@@ -189,6 +215,14 @@ def seed_database():
         print(f"  用户：{db.query(User).count()} 人")
         print(f"  商品：{db.query(Product).count()} 款")
         print(f"  订单：{db.query(Order).count()} 单")
+        print("  退款演示场景：")
+        for order_id, scenario in DEMO_REFUND_SCENARIOS.items():
+            order = db.get(Order, order_id)
+            if order is not None:
+                print(
+                    f"    {order.id} / {float(order.total_price):.0f}元 / "
+                    f"{scenario}"
+                )
         print(f"{'='*40}")
 
     except Exception as e:

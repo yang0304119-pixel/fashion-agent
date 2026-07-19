@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FashionAgent 电商客服会话 Sandbox">
+  <title>云裳服饰 · AI 客服会话 Sandbox</title>
+  <link rel="stylesheet" href="/css/demo-chat.css">
+</head>
+<body class="demo-chat-page" data-session-recovery="/demo-chat.html">
+  <div class="demo-notice" role="note">
+    <span class="notice-pill">SANDBOX</span>
+    <span>演示环境 · Mock 外部电商系统与模拟消费者</span>
+    <span>模拟退款，不涉及真实资金</span>
+  </div>
+
+  <main class="chat-shell">
+    <header class="chat-topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">云</span>
+        <div>
+          <strong>云裳服饰官方客服</strong>
+          <span><i></i> AI 服务在线</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <a href="/admin.html">AI 客服运营台</a>
+        <div class="member-chip">
+          <span class="member-avatar" id="memberAvatar">客</span>
+          <div><small>模拟消费者</small><strong id="demoIdentity">正在识别…</strong></div>
+        </div>
+      </div>
+    </header>
+
+    <section class="chat-workspace" aria-label="电商客服会话工作台">
+      <aside class="context-sidebar">
+        <div class="sidebar-intro">
+          <span class="section-kicker">CONVERSATION</span>
+          <h1>一场会话，完成整条服务链路</h1>
+          <p>选择商品或订单作为可信上下文，再像真实购物用户一样发起咨询。</p>
+        </div>
+
+        <section class="context-section" aria-labelledby="currentContextTitle">
+          <div class="section-heading">
+            <div><span class="section-kicker">CONTEXT</span><h2 id="currentContextTitle">当前上下文</h2></div>
+            <button class="quiet-button" id="clearContextBtn" type="button" disabled>清除</button>
+          </div>
+          <div class="context-slot" id="currentProductSlot">
+            <span class="slot-icon product-icon" aria-hidden="true">衣</span>
+            <div><small>当前商品</small><strong>尚未选择商品</strong><span>从输入区添加商品卡片</span></div>
+          </div>
+          <div class="context-slot" id="currentOrderSlot">
+            <span class="slot-icon order-icon" aria-hidden="true">单</span>
+            <div><small>当前订单</small><strong>尚未选择订单</strong><span>仅展示模拟消费者订单</span></div>
+          </div>
+        </section>
+
+        <section class="capability-section" aria-labelledby="capabilityTitle">
+          <span class="section-kicker">CAPABILITIES</span>
+          <h2 id="capabilityTitle">本会话可演示</h2>
+          <ul class="capability-list">
+            <li><span>01</span><div><strong>商品知识</strong><small>材质、洗护与适用场景 · RAG 来源</small></div></li>
+            <li><span>02</span><div><strong>尺码与库存</strong><small>确定性服务查询与推荐</small></div></li>
+            <li><span>03</span><div><strong>订单与退款</strong><small>归属校验、风控与人工审核</small></div></li>
+          </ul>
+        </section>
+      </aside>
+
+      <section class="conversation-panel">
+        <header class="conversation-header">
+          <div>
+            <span class="section-kicker">LIVE SESSION</span>
+            <h2>客服会话 Sandbox</h2>
+          </div>
+          <div class="session-state"><span></span>上下文由服务端校验</div>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite" aria-label="聊天消息"></div>
+
+        <div class="suggestion-strip" aria-label="演示问题">
+          <button type="button" data-prompt="这件适合东北冬天吗？">适合东北冬天吗？</button>
+          <button type="button" data-prompt="我175cm、70kg，喜欢正常合身">推荐尺码</button>
+          <button type="button" data-prompt="这件商品现在有货吗？">查询库存</button>
+          <button type="button" data-prompt="这个订单发货了吗？">查询订单</button>
+          <button type="button" data-prompt="我不想要了，申请退款">申请退款</button>
+        </div>
+
+        <div class="mobile-context hidden" id="mobileContext"></div>
+
+        <form class="composer" id="chatForm">
+          <div class="attachment-actions">
+            <button class="attach-button" id="openProductPicker" type="button">
+              <span aria-hidden="true">＋</span>商品
+            </button>
+            <button class="attach-button" id="openOrderPicker" type="button">
+              <span aria-hidden="true">＋</span>订单
+            </button>
+          </div>
+          <label class="message-input-wrap">
+            <span class="sr-only">输入客服问题</span>
+            <textarea id="chatInput" rows="1" maxlength="4000" placeholder="先选择商品或订单，再输入你的问题…"></textarea>
+          </label>
+          <button class="send-button" id="sendBtn" type="submit">
+            <span>发送</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l17 8-17 8 3-8-3-8zm3.8 7h7.7L6.3 6.7 7.8 11zm0 2-1.5 4.3 9.2-4.3H7.8z"/></svg>
+          </button>
+        </form>
+        <p class="composer-note">浏览器只提交商品或订单 ID；价格、库存、身份与状态均由服务端重新读取。</p>
+      </section>
+    </section>
+  </main>
+
+  <dialog class="picker-dialog" id="productPickerDialog" aria-labelledby="productPickerTitle">
+    <div class="picker-frame">
+      <header class="picker-header">
+        <div><span class="section-kicker">PRODUCT CONTEXT</span><h2 id="productPickerTitle">选择要咨询的商品</h2><p>卡片只负责选择；业务数据会在服务端重新校验。</p></div>
+        <button class="dialog-close" type="button" data-close-dialog="productPickerDialog" aria-label="关闭">×</button>
+      </header>
+      <div class="picker-content" id="productPickerContent"></div>
+    </div>
+  </dialog>
+
+  <dialog class="picker-dialog" id="orderPickerDialog" aria-labelledby="orderPickerTitle">
+    <div class="picker-frame">
+      <header class="picker-header">
+        <div><span class="section-kicker">ORDER CONTEXT</span><h2 id="orderPickerTitle">选择模拟消费者订单</h2><p>订单来自 Mock 外部电商系统，并受用户归属约束。</p></div>
+        <button class="dialog-close" type="button" data-close-dialog="orderPickerDialog" aria-label="关闭">×</button>
+      </header>
+      <div class="picker-content" id="orderPickerContent"></div>
+    </div>
+  </dialog>
+
+  <div class="toast hidden" id="pageToast" role="alert"></div>
+  <script type="module" src="/js/demo-chat.js"></script>
+</body>
+</html>

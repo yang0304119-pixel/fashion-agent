@@ -2,5 +2,5 @@
 Agent 工作流节点
 
 每个节点是一个接收 AgentState 返回部分更新的函数。
-Phase 3 实现：router_node → rag_node → answer_node
+当前包含路由、RAG、ReAct、退款、订单/库存/尺码及会话状态节点。
 """

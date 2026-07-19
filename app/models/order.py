@@ -5,9 +5,7 @@
 status 字段枚举：pending(待发货) / shipped(已发货) / delivered(已签收) / refunded(已退款)
 """
 
-from decimal import Decimal
-
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 

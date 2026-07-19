@@ -18,6 +18,8 @@
 
 from pathlib import Path
 from decimal import Decimal
+from typing import Literal
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT_PATH = (
@@ -28,6 +30,9 @@ PROJECT_ROOT_PATH = (
 class Settings(BaseSettings):
     PROJECT_ROOT: Path = PROJECT_ROOT_PATH
 
+    # ── 运行环境 ──
+    ENVIRONMENT: str = "development"
+
     # ── 数据库 ──
     DATABASE_URL: str = ""
 
@@ -36,13 +41,57 @@ class Settings(BaseSettings):
     LLM_API_BASE: str
     LLM_MODEL: str
 
+    # ── 身份认证 ──
+    # 生产环境必须通过环境变量设置不少于 32 字符的随机密钥。
+    # 开发环境未设置时，会在 data/.jwt_secret 中生成本机密钥。
+    JWT_SECRET_KEY: str = ""
+    JWT_ISSUER: str = "fashion-agent"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, gt=0, le=1440)
+
+    # 仅用于初始化本地演示账号；生产环境不要配置公共默认密码。
+    SEED_CUSTOMER_PASSWORD: str = ""
+    SEED_ADMIN_PASSWORD: str = ""
+
+    # ── Mock 外部电商系统 ──
+    # 仅非生产环境使用；模拟外部渠道已识别的固定消费者。
+    DEMO_STORE_TENANT_ID: int = Field(default=1, gt=0)
+    DEMO_STORE_USER_ID: int = Field(default=1, gt=0)
+
     # ── 退款策略 ──
     # 小于等于此金额的退款自动审批，超过则触发人工审核
     REFUND_AUTO_LIMIT: Decimal = Decimal("100.00")
+    # 当前项目明确为Demo；生产环境仍由网关工厂禁止mock。
+    REFUND_GATEWAY_MODE: Literal["manual", "mock"] = "mock"
+    # Mock默认结果；failed订单列表用于同一Demo稳定展示渠道失败场景。
+    MOCK_REFUND_RESULT: Literal["succeeded", "pending", "failed"] = "succeeded"
+    MOCK_REFUND_FAILED_ORDER_IDS: str = "10002"
+
+    @property
+    def mock_refund_failed_order_ids(self) -> frozenset[int]:
+        values: set[int] = set()
+        for raw_value in self.MOCK_REFUND_FAILED_ORDER_IDS.split(","):
+            value = raw_value.strip()
+            if not value:
+                continue
+            try:
+                order_id = int(value)
+            except ValueError as error:
+                raise ValueError(
+                    "MOCK_REFUND_FAILED_ORDER_IDS必须是逗号分隔的整数"
+                ) from error
+            if order_id <= 0:
+                raise ValueError("Mock失败订单号必须大于0")
+            values.add(order_id)
+        return frozenset(values)
+
+    # ── 多轮槽位会话 ──
+    CONVERSATION_STATE_TTL_MINUTES: int = Field(
+        default=30,
+        ge=5,
+        le=1440,
+    )
 
     # ── RAG 配置（占位，Phase 2 启用） ──
-    CHROMA_PATH: str = ""
-    TOP_K: int = 3
     DOCLING_ARTIFACTS_PATH: Path = Path(
         r"D:\docling_models"
     )
@@ -67,15 +116,5 @@ class Settings(BaseSettings):
         db_dir = self.PROJECT_ROOT / "data"
         db_dir.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_dir / 'fashion.db'}"
-
-    @property
-    def resolved_chroma_path(self) -> str:
-        """返回 Chroma 持久化路径，空值时使用默认 data/vector_store/"""
-        if self.CHROMA_PATH:
-            return self.CHROMA_PATH
-        path = self.PROJECT_ROOT / "data" / "vector_store"
-        path.mkdir(parents=True, exist_ok=True)
-        return str(path)
-
 
 settings = Settings()

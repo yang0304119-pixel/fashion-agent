@@ -1,8 +1,32 @@
-"""
-聊天接口请求/响应模型
-"""
+"""聊天接口请求/响应模型。"""
 
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ProductChatContext(BaseModel):
+    """浏览器只提交商品主键，其他商品字段全部由服务端重查。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["product"]
+    product_id: int = Field(gt=0)
+
+
+class OrderChatContext(BaseModel):
+    """浏览器只提交订单主键，身份和订单归属来自访问令牌。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["order"]
+    order_id: int = Field(gt=0)
+
+
+ChatContext = Annotated[
+    ProductChatContext | OrderChatContext,
+    Field(discriminator="type"),
+]
 
 
 class RagSource(BaseModel):
@@ -17,9 +41,17 @@ class RagSource(BaseModel):
 
 class ChatRequest(BaseModel):
     """聊天请求"""
-    session_id: str
-    user_id: int
-    message: str
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    message: str = Field(min_length=1, max_length=4000)
+    context: ChatContext | None = None
 
 
 class ChatResponse(BaseModel):
@@ -28,6 +60,8 @@ class ChatResponse(BaseModel):
     intent: str
     confidence: float
     answer: str
+    message_type: Literal["text", "refund_status"] = "text"
+    payload: dict[str, Any] | None = None
     sources: list[RagSource] = Field(
         default_factory=list
     )

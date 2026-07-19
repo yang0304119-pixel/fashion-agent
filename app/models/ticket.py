@@ -5,9 +5,7 @@
 status 枚举：pending(待处理) / approved(已通过) / rejected(已拒绝)
 """
 
-from decimal import Decimal
-
-from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, ForeignKey, Boolean
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -27,11 +25,25 @@ class Ticket(Base):
     risk_level = Column(String(20), nullable=False, default="low", comment="风险等级：low/medium/high")
     status = Column(String(20), nullable=False, default="pending", comment="工单状态")
     human_review = Column(Boolean, default=False, comment="是否需要人工审核")
+    reviewed_by = Column(
+        Integer,
+        ForeignKey("user.id"),
+        nullable=True,
+        index=True,
+        comment="审核管理员 ID",
+    )
+    reviewed_at = Column(DateTime, nullable=True, comment="审核完成时间")
+    review_reason = Column(Text, nullable=True, comment="审核意见或拒绝原因")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
 
     # 关系
     order = relationship("Order", backref="tickets")
-    user = relationship("User", backref="tickets")
+    user = relationship("User", foreign_keys=[user_id], backref="tickets")
+    reviewed_by_user = relationship(
+        "User",
+        foreign_keys=[reviewed_by],
+        backref="reviewed_tickets",
+    )
 
     def __repr__(self) -> str:
         return f"<Ticket(id={self.id}, type={self.type}, status={self.status})>"

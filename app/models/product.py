@@ -13,8 +13,6 @@ sizes 使用 JSON 字段存储可用尺码列表，比关联表更轻量。
 # ─────────────────────────────
 """
 
-from decimal import Decimal
-
 from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, JSON, ForeignKey
 from sqlalchemy.sql import func
 

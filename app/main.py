@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.routers import chat, orders, tickets, traces
+from app.routers import admin, auth, chat, demo_store, orders, refunds, tickets
 
 # ── 日志配置 ──
 logging.basicConfig(
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 # ── 应用实例 ──
 fastapi_app = FastAPI(
     title="FashionAgent",
-    description="服装电商智能客服 Agent API",
-    version="0.3.0",
+    description="电商 AI 客服自动化与辅助系统 API",
+    version="0.4.0",
 )
 
 
@@ -51,15 +51,18 @@ def on_startup() -> None:
 @fastapi_app.get("/api/health", tags=["system"])
 def health():
     """健康检查端点。"""
-    return {"status": "ok", "version": "0.3.0"}
+    return {"status": "ok", "version": "0.4.0"}
 
 
 # ── 注册业务路由 ──
 
+fastapi_app.include_router(auth.router, prefix="/api")
+fastapi_app.include_router(demo_store.router, prefix="/api")
 fastapi_app.include_router(chat.router, prefix="/api")
 fastapi_app.include_router(orders.router, prefix="/api")
 fastapi_app.include_router(tickets.router, prefix="/api")
-fastapi_app.include_router(traces.router, prefix="/api")
+fastapi_app.include_router(refunds.router, prefix="/api")
+fastapi_app.include_router(admin.router, prefix="/api")
 
 # ── 可选的静态文件挂载（前端） ──
 

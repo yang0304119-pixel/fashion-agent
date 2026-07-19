@@ -3,9 +3,20 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-KNOWLEDGE_DIR = (
+RAW_KNOWLEDGE_DIR = (
     PROJECT_ROOT / "data" / "knowledge" / "raw"
 )
+
+PROCESSED_KNOWLEDGE_DIR = (
+    PROJECT_ROOT / "data" / "knowledge" / "processed"
+)
+
+QUALITY_REPORT_FILE = (
+    PROCESSED_KNOWLEDGE_DIR / "quality-report.json"
+)
+
+# 向后兼容已有调用；原始格式文件始终从 raw 目录加载。
+KNOWLEDGE_DIR = RAW_KNOWLEDGE_DIR
 
 CHROMA_DIR = (
     PROJECT_ROOT / "data" / "chroma"

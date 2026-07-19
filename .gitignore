@@ -18,6 +18,8 @@ env/
 
 # Database (generated locally)
 *.db
+data/.jwt_secret
+data/dev_auth_credentials.txt
 
 # Vector store (generated locally)
 data/vector_store/

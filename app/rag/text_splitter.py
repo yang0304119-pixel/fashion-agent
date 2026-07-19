@@ -312,19 +312,3 @@ def split_knowledge_documents(
             )
 
     return result
-
-
-def split_one_document(
-        document: Document,
-) -> list[Document]:
-    """切分单个 Document。"""
-
-    return split_knowledge_documents([document])
-
-
-def split_documents(
-        documents: Iterable[Document],
-) -> list[Document]:
-    """兼容原来的函数调用名称。"""
-
-    return split_knowledge_documents(documents)

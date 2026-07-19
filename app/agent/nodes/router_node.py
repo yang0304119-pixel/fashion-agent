@@ -18,34 +18,19 @@
 # ─────────────────────────────
 """
 
+import logging
+
 from openai import OpenAI
 
+from app.agent.intent_rules import classify_by_rules
+from app.agent.slot_extractors import collect_slots, missing_slots_for_intent
 from app.agent.state import AgentState
 from app.core.config import settings
+from app.core.database import SessionLocal
+from app.services.conversation_state_service import ConversationStateService
 
 
-# ── 关键词规则 ──────────────────────────────────────────
-# (关键词列表, 对应意图)
-_RULES: list[tuple[list[str], str]] = [
-    (
-        [
-            "退款规则",
-            "退款政策",
-            "退货规则",
-            "退货政策",
-            "换货规则",
-            "售后规则",
-            "七天无理由",
-        ],
-        "knowledge_query",
-    ),
-    # 退款优先于订单查询（"订单 10003 退款"应判为退款而非查订单）
-    (["退款", "退货", "质量问题", "不想要了", "起球", "破损"], "refund_request"),
-    (["订单", "发货", "物流", "快递"], "order_query"),
-    (["身高", "体重", "尺码", "穿什么码"], "size_recommend"),
-    (["库存", "有货", "现货", "还有吗"], "inventory_query"),
-    (["材质", "面料", "保暖", "洗", "成分"], "knowledge_query"),
-]
+logger = logging.getLogger(__name__)
 
 # LLM 意图分类 prompt（只输出意图名称，方便解析）
 _CLASSIFY_PROMPT: str = """你是一个服装电商客服意图分类器。
@@ -84,8 +69,13 @@ def router_node(state: AgentState) -> dict:
             "missing_slots": [],
         }
 
+    # ── 阶段 0：恢复上一轮待补参数 ──
+    pending_result = _resume_pending_conversation(state, message)
+    if pending_result is not None:
+        return pending_result
+
     # ── 阶段 1：关键词规则匹配 ──
-    matched = _match_by_rules(message)
+    matched = classify_by_rules(message)
     if matched:
         return {
             "intent": matched,
@@ -103,13 +93,84 @@ def router_node(state: AgentState) -> dict:
     }
 
 
-def _match_by_rules(message: str) -> str | None:
-    """关键词规则匹配，命中返回意图名称，未命中返回 None。"""
-    for keywords, intent in _RULES:
-        for keyword in keywords:
-            if keyword in message:
-                return intent
-    return None
+def _resume_pending_conversation(
+    state: AgentState,
+    message: str,
+) -> dict | None:
+    tenant_id = state.get("tenant_id", 0)
+    user_id = state.get("user_id", 0)
+    session_id = state.get("session_id", "")
+    if not tenant_id or not user_id or not session_id:
+        return None
+
+    db = SessionLocal()
+    try:
+        pending = ConversationStateService(db).load_active(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            session_id=session_id,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("读取待补槽位会话失败，降级为普通意图分类")
+        return None
+    finally:
+        db.close()
+
+    if pending is None:
+        return None
+
+    context_type = (state.get("chat_context") or {}).get("context_type")
+    if _context_conflicts_with_pending(context_type, pending.pending_intent):
+        return None
+
+    current_rule_intent = classify_by_rules(message)
+    existing_slots = dict(pending.collected_slots)
+    existing_slots.update(state.get("collected_slots") or {})
+    collected_slots = collect_slots(
+        pending.pending_intent,
+        message,
+        existing_slots,
+    )
+
+    # 明确表达了另一个意图时允许换话题。退款流程回复“订单10001”会被
+    # 规则识别成订单查询，但它实际上是在补退款所需的order_id。
+    compatible_followup = (
+        current_rule_intent in {None, pending.pending_intent}
+        or (
+            pending.pending_intent == "refund_request"
+            and current_rule_intent == "order_query"
+            and collected_slots.get("order_id") is not None
+            and not any(
+                keyword in message
+                for keyword in ("查询", "查一下", "发货", "物流", "快递", "状态")
+            )
+        )
+    )
+    if not compatible_followup:
+        return None
+
+    return {
+        "intent": pending.pending_intent,
+        "pending_intent": pending.pending_intent,
+        "confidence": 1.0,
+        "missing_slots": missing_slots_for_intent(
+            pending.pending_intent,
+            collected_slots,
+        ),
+        "collected_slots": collected_slots,
+    }
+
+
+def _context_conflicts_with_pending(
+    context_type: str | None,
+    pending_intent: str,
+) -> bool:
+    if context_type == "product":
+        return pending_intent in {"order_query", "refund_request"}
+    if context_type == "order":
+        return pending_intent in {"inventory_query", "size_recommend"}
+    return False
 
 
 def _classify_by_llm(message: str) -> tuple[str, float]:
