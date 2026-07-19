@@ -141,7 +141,7 @@ class ChatContextApiTests(ApiTestCase):
             },
         )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["intent"], "inventory_query")
+        self.assertEqual(response.json()["intent"], "product_query")
         self.assertIn("499.00 元", response.json()["answer"])
 
     def test_product_card_supplies_context_for_size_recommendation(self):

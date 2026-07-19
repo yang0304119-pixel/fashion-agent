@@ -74,6 +74,7 @@ class ApiTestCase(unittest.TestCase):
                 self.Session,
             ),
             patch("app.agent.nodes.refund_node.SessionLocal", self.Session),
+            patch("app.agent.nodes.refund_status_node.SessionLocal", self.Session),
             patch("app.providers.factory.SessionLocal", self.Session),
             patch(
                 "app.rag.knowledge_index_resolver.SessionLocal",

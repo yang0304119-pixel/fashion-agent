@@ -36,6 +36,11 @@ class AgentState(TypedDict):
     # ── 路由结果（Phase 3 核心） ──
     intent: str                 # knowledge/order/inventory/size/refund/composite/fallback
     confidence: float           # 0~1
+    intents: list[str]
+    router_source: str
+    router_evidence: list[str]
+    requires_planning: bool
+    clarification_question: str | None
     missing_slots: list[str]    # 需要的参数缺失（如订单号、身高体重）
     pending_intent: str | None  # 上一轮等待补参的确定性业务意图
     collected_slots: dict       # 当前会话已经收集并验证的槽位

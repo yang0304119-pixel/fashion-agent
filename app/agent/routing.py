@@ -5,10 +5,14 @@ from app.agent.state import AgentState
 
 INTENT_ROUTES = {
     "knowledge_query": "rag",
+    "product_query": "inventory",
     "order_query": "order",
     "inventory_query": "inventory",
     "size_recommend": "size",
     "refund_request": "refund",
+    "refund_status_query": "refund_status",
+    "after_sales_request": "handoff",
+    "human_handoff": "handoff",
     "composite_query": "react",
     "fallback": "fallback",
 }

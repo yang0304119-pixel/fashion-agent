@@ -7,7 +7,7 @@ LLM 自主决策：调用工具 → 结果反馈给 LLM → 再决策 → 直到
 # 关键设计说明
 # ─────────────────────────────
 # ReAct 的使用边界：
-# - 仅组合订单查询、库存查询、尺码推荐、商品目录搜索
+# - 仅组合订单、库存、尺码、商品目录和租户知识库查询
 # - 退款等资金业务必须进入确定性工作流
 # 为什么限定最大迭代次数：
 # - 防止 LLM 陷入循环或无限调用工具
@@ -136,6 +136,7 @@ def react_node(state: AgentState) -> dict:
                         "query_order",
                         "query_inventory",
                         "search_products",
+                        "retrieve_knowledge",
                     }:
                         trusted_args["tenant_id"] = tenant_id
                     result = handler(**trusted_args)

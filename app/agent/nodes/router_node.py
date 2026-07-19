@@ -1,108 +1,189 @@
-"""
-意图路由节点
-
-采用"规则优先 + LLM 兜底"的混合策略判断用户意图：
-1. 先过关键词规则（零成本、可解释、高置信度）
-2. 未命中则调 LLM 语义分类
-3. 仍无法识别 → fallback
-
-# 关键设计说明
-# ─────────────────────────────
-# 为什么规则优先于 LLM：
-# - 关键词匹配 0 成本、0 延迟，LLM 调用有费用和延迟
-# - 规则命中直接输出高置信度（0.95），无需 LLM 确认
-# - 规则可解释、可调试；LLM 分类可能出现意外结果
-# 为什么路由和分类放一个函数而非两个：
-# - 调用方只需要"给我意图"，不需要知道内部是规则还是 LLM
-# - 后续加规则或改 prompt 只需要改这一个文件
-# ─────────────────────────────
-"""
+"""分层漏斗意图路由节点。"""
 
 import logging
 
-from openai import OpenAI
-
-from app.agent.intent_rules import classify_by_rules
+from app.agent.intent_rules import (
+    READONLY_INTENTS,
+    classify_by_rules,
+    detect_all_intents,
+    is_after_sales_write_action,
+    is_explicit_refund_action,
+)
+from app.agent.planner import plan_intents
+from app.agent.semantic_router import (
+    SEMANTIC_DIRECT_THRESHOLD,
+    SEMANTIC_PLANNER_THRESHOLD,
+    semantic_router,
+)
 from app.agent.slot_extractors import collect_slots, missing_slots_for_intent
 from app.agent.state import AgentState
-from app.core.config import settings
 from app.core.database import SessionLocal
+from app.models.agent_trace import AgentTrace
 from app.services.conversation_state_service import ConversationStateService
 
 
 logger = logging.getLogger(__name__)
 
-# LLM 意图分类 prompt（只输出意图名称，方便解析）
-_CLASSIFY_PROMPT: str = """你是一个服装电商客服意图分类器。
-请判断用户输入的意图，只输出以下 intent 名称之一，不要输出其他内容：
-
-- knowledge_query: 询问商品知识、面料材质、洗护方式、产品详情
-- size_recommend: 询问尺码推荐、身高体重对应尺码
-- order_query: 查询订单状态、物流信息、发货情况
-- refund_request: 申请退款、退货、质量问题售后
-- inventory_query: 查询商品库存、是否有货
-- fallback: 闲聊、问候、非业务问题或无法判断
-
-用户输入：{message}
-
-intent："""
-
 
 def router_node(state: AgentState) -> dict:
-    """意图路由节点：规则匹配 → LLM 兜底 → 输出 intent 和置信度。
-
-    Args:
-        state: 当前 AgentState，至少包含 message 字段。
-
-    Returns:
-        更新 state 的字典，包含：
-        - intent: 识别的意图
-        - confidence: 置信度（0~1）
-        - missing_slots: 缺失的槽位（如需要订单号但未提供）
-    """
-    message: str = state.get("message", "").strip()
-
+    message = state.get("message", "").strip()
     if not message:
-        return {
-            "intent": "fallback",
-            "confidence": 1.0,
-            "missing_slots": [],
-        }
+        return _decision("fallback", 1.0, "rule", ["空消息"])
 
-    # ── 阶段 0：恢复上一轮待补参数 ──
-    pending_result = _resume_pending_conversation(state, message)
-    if pending_result is not None:
-        return pending_result
+    pending = _resume_pending_conversation(state, message)
+    if pending is not None:
+        return pending
 
-    # ── 阶段 1：关键词规则匹配 ──
-    matched = classify_by_rules(message)
-    if matched:
-        return {
-            "intent": matched,
-            "confidence": 0.95,
-            "missing_slots": [],
-        }
+    rule_intent = classify_by_rules(message)
+    if rule_intent is not None:
+        matched_intents = [
+            intent
+            for intent in detect_all_intents(message)
+            if intent in READONLY_INTENTS
+        ]
+        if rule_intent != "composite_query":
+            matched_intents = [rule_intent]
+        return _decision(
+            rule_intent,
+            0.99,
+            "deterministic_rule",
+            [f"高精度规则:{rule_intent}"],
+            intents=matched_intents,
+            requires_planning=(rule_intent == "composite_query"),
+        )
 
-    # ── 阶段 2：LLM 语义分类 ──
-    intent, confidence = _classify_by_llm(message)
+    semantic = semantic_router.route(
+        message=message,
+        pending_intent=state.get("pending_intent"),
+        chat_context=state.get("chat_context"),
+        collected_slots=state.get("collected_slots"),
+        recent_messages=_recent_messages(state),
+    )
+    if (
+        semantic is not None
+        and not semantic.requires_planning
+        and semantic.confidence >= SEMANTIC_DIRECT_THRESHOLD
+        and len(semantic.intents) == 1
+    ):
+        intent = semantic.intents[0]
+        if intent == "refund_request" and not is_explicit_refund_action(message):
+            intent = "knowledge_query"
+        if intent == "after_sales_request" and not is_after_sales_write_action(message):
+            intent = "fallback"
+        return _decision(
+            intent,
+            semantic.confidence,
+            semantic.source,
+            semantic.evidence,
+        )
 
+    semantic_intents = semantic.intents if semantic else []
+    planner = plan_intents(
+        message=message,
+        semantic_intents=semantic_intents,
+        context_summary=_context_summary(state),
+    )
+    if planner is not None:
+        if planner.requires_clarification:
+            return {
+                **_decision(
+                    "fallback",
+                    planner.confidence,
+                    "llm_planner",
+                    planner.evidence,
+                ),
+                "clarification_question": planner.clarification_question,
+                "final_answer": planner.clarification_question
+                or "请再说明一下您希望查询还是办理业务。",
+                "fallback_handled": True,
+            }
+        intents = _guard_planner_intents(message, planner.intents)
+        route_intent = _route_intents(intents)
+        return _decision(
+            route_intent,
+            planner.confidence,
+            "llm_planner",
+            planner.evidence,
+            intents=intents,
+            requires_planning=(route_intent == "composite_query"),
+        )
+
+    if semantic is not None and semantic.confidence >= SEMANTIC_PLANNER_THRESHOLD:
+        intents = _guard_planner_intents(message, semantic.intents)
+        route_intent = _route_intents(intents)
+        if route_intent != "fallback":
+            return _decision(
+                route_intent,
+                semantic.confidence,
+                semantic.source,
+                semantic.evidence,
+                intents=intents,
+                requires_planning=(route_intent == "composite_query"),
+            )
+
+    return _decision(
+        "fallback",
+        semantic.confidence if semantic else 0.0,
+        "safe_fallback",
+        (semantic.evidence if semantic else []) + ["低置信度，未执行写操作"],
+    )
+
+
+def _decision(
+    intent: str,
+    confidence: float,
+    source: str,
+    evidence: list[str],
+    *,
+    intents: list[str] | None = None,
+    requires_planning: bool = False,
+) -> dict:
     return {
         "intent": intent,
-        "confidence": confidence,
+        "intents": intents or [intent],
+        "confidence": round(float(confidence), 4),
+        "router_source": source,
+        "router_evidence": evidence,
+        "requires_planning": requires_planning,
         "missing_slots": [],
     }
 
 
-def _resume_pending_conversation(
-    state: AgentState,
-    message: str,
-) -> dict | None:
+def _route_intents(intents: list[str]) -> str:
+    unique = list(dict.fromkeys(intents))
+    protected = [
+        intent
+        for intent in unique
+        if intent in {"human_handoff", "after_sales_request", "refund_request"}
+    ]
+    if protected:
+        return protected[0]
+    readonly = [intent for intent in unique if intent in READONLY_INTENTS]
+    if len(readonly) > 1:
+        return "composite_query"
+    if readonly:
+        return readonly[0]
+    return "fallback"
+
+
+def _guard_planner_intents(message: str, intents: list[str]) -> list[str]:
+    guarded: list[str] = []
+    for intent in intents:
+        if intent == "refund_request" and not is_explicit_refund_action(message):
+            guarded.append("knowledge_query")
+        elif intent == "after_sales_request" and not is_after_sales_write_action(message):
+            guarded.append("fallback")
+        else:
+            guarded.append(intent)
+    return list(dict.fromkeys(guarded))
+
+
+def _resume_pending_conversation(state: AgentState, message: str) -> dict | None:
     tenant_id = state.get("tenant_id", 0)
     user_id = state.get("user_id", 0)
     session_id = state.get("session_id", "")
     if not tenant_id or not user_id or not session_id:
         return None
-
     db = SessionLocal()
     try:
         pending = ConversationStateService(db).load_active(
@@ -112,101 +193,94 @@ def _resume_pending_conversation(
         )
     except Exception:
         db.rollback()
-        logger.exception("读取待补槽位会话失败，降级为普通意图分类")
+        logger.exception("读取待补槽位会话失败")
         return None
     finally:
         db.close()
-
     if pending is None:
         return None
-
     context_type = (state.get("chat_context") or {}).get("context_type")
     if _context_conflicts_with_pending(context_type, pending.pending_intent):
         return None
-
     current_rule_intent = classify_by_rules(message)
-    existing_slots = dict(pending.collected_slots)
-    existing_slots.update(state.get("collected_slots") or {})
-    collected_slots = collect_slots(
-        pending.pending_intent,
-        message,
-        existing_slots,
-    )
-
-    # 明确表达了另一个意图时允许换话题。退款流程回复“订单10001”会被
-    # 规则识别成订单查询，但它实际上是在补退款所需的order_id。
-    compatible_followup = (
-        current_rule_intent in {None, pending.pending_intent}
-        or (
-            pending.pending_intent == "refund_request"
-            and current_rule_intent == "order_query"
-            and collected_slots.get("order_id") is not None
-            and not any(
-                keyword in message
-                for keyword in ("查询", "查一下", "发货", "物流", "快递", "状态")
-            )
-        )
-    )
-    if not compatible_followup:
+    existing = dict(pending.collected_slots)
+    existing.update(state.get("collected_slots") or {})
+    slots = collect_slots(pending.pending_intent, message, existing)
+    compatible = current_rule_intent in {None, pending.pending_intent}
+    if (
+        pending.pending_intent in {"refund_request", "refund_status_query"}
+        and current_rule_intent == "order_query"
+        and slots.get("order_id") is not None
+        and not any(word in message for word in ("查询", "发货", "物流", "快递", "状态"))
+    ):
+        compatible = True
+    if not compatible:
         return None
-
     return {
-        "intent": pending.pending_intent,
-        "pending_intent": pending.pending_intent,
-        "confidence": 1.0,
-        "missing_slots": missing_slots_for_intent(
+        **_decision(
             pending.pending_intent,
-            collected_slots,
+            1.0,
+            "conversation_state",
+            ["恢复待补参数意图"],
         ),
-        "collected_slots": collected_slots,
+        "pending_intent": pending.pending_intent,
+        "missing_slots": missing_slots_for_intent(pending.pending_intent, slots),
+        "collected_slots": slots,
     }
 
 
-def _context_conflicts_with_pending(
-    context_type: str | None,
-    pending_intent: str,
-) -> bool:
+def _context_conflicts_with_pending(context_type: str | None, pending: str) -> bool:
     if context_type == "product":
-        return pending_intent in {"order_query", "refund_request"}
+        return pending in {"order_query", "refund_request", "refund_status_query"}
     if context_type == "order":
-        return pending_intent in {"inventory_query", "size_recommend"}
+        return pending in {"inventory_query", "product_query", "size_recommend"}
     return False
 
 
-def _classify_by_llm(message: str) -> tuple[str, float]:
-    """LLM 语义分类，返回 (intent, confidence)。
+def _context_summary(state: AgentState) -> str:
+    context = state.get("chat_context") or {}
+    slots = state.get("collected_slots") or {}
+    return f"context={context}; collected_slots={slots}; pending={state.get('pending_intent')}"
 
-    调用 DeepSeek 等兼容 OpenAI 格式的模型，
-    解析 LLM 输出为意图名称和置信度。
 
-    Returns:
-        (intent, confidence)，识别失败时返回 ("fallback", 0.0)。
-    """
+def _recent_messages(state: AgentState) -> list[str]:
+    tenant_id = state.get("tenant_id", 0)
+    user_id = state.get("user_id", 0)
+    session_id = state.get("session_id", "")
+    if not tenant_id or not user_id or not session_id:
+        return []
+    db = SessionLocal()
     try:
-        client = OpenAI(
-            api_key=settings.LLM_API_KEY,
-            base_url=settings.LLM_API_BASE,
+        rows = (
+            db.query(AgentTrace.message)
+            .filter(
+                AgentTrace.tenant_id == tenant_id,
+                AgentTrace.user_id == user_id,
+                AgentTrace.session_id == session_id,
+                AgentTrace.message.is_not(None),
+            )
+            .order_by(AgentTrace.id.desc())
+            .limit(4)
+            .all()
         )
-        response = client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[{"role": "user", "content": _CLASSIFY_PROMPT.format(message=message)}],
-            max_tokens=20,
-            temperature=0,
-        )
-        raw = response.choices[0].message.content.strip().lower()
-
-        # 解析 LLM 输出
-        valid_intents = {"knowledge_query", "size_recommend", "order_query", "refund_request", "inventory_query", "fallback"}
-        if raw in valid_intents:
-            return raw, 0.85
-
-        # LLM 输出不在预期范围内，尝试模糊匹配
-        for intent in valid_intents:
-            if intent in raw or raw in intent:
-                return intent, 0.80
-
-        return "fallback", 0.3
-
+        messages = [str(row[0]) for row in reversed(rows) if row[0]]
+        current = state.get("message", "").strip()
+        if messages and messages[-1] == current:
+            messages.pop()
+        return messages[-3:]
     except Exception:
-        # LLM 调用失败时 fallback 降级
+        return []
+    finally:
+        db.close()
+
+
+def _classify_by_llm(message: str) -> tuple[str, float]:
+    """向后兼容旧测试和调用；新运行时使用结构化 Planner。"""
+    decision = plan_intents(
+        message=message,
+        semantic_intents=[],
+        context_summary="",
+    )
+    if decision is None:
         return "fallback", 0.0
+    return _route_intents(decision.intents), decision.confidence

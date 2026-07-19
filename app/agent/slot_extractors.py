@@ -20,8 +20,10 @@ PRODUCT_NAME_MAP: tuple[tuple[tuple[str, ...], int], ...] = (
 REQUIRED_SLOTS: dict[str, tuple[str, ...]] = {
     "order_query": ("order_id",),
     "inventory_query": ("product_id",),
+    "product_query": ("product_id",),
     "size_recommend": ("height", "weight"),
     "refund_request": ("order_id",),
+    "refund_status_query": ("order_id",),
 }
 
 
@@ -71,7 +73,7 @@ def collect_slots(
     """将当前消息中新出现的槽位合并到历史槽位。"""
     collected = dict(existing or {})
 
-    if intent in {"order_query", "refund_request"}:
+    if intent in {"order_query", "refund_request", "refund_status_query"}:
         order_id = extract_order_id(message) or _extract_bare_integer(
             message,
             minimum_digits=5,
@@ -80,6 +82,14 @@ def collect_slots(
             collected["order_id"] = order_id
 
     if intent == "inventory_query":
+        product_id = extract_product_id(message) or _extract_bare_integer(
+            message,
+            minimum_digits=1,
+        )
+        if product_id is not None:
+            collected["product_id"] = product_id
+
+    if intent == "product_query":
         product_id = extract_product_id(message) or _extract_bare_integer(
             message,
             minimum_digits=1,

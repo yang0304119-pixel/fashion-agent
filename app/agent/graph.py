@@ -30,6 +30,8 @@ from app.agent.nodes.rag_node import rag_node
 from app.agent.nodes.react_node import react_node
 from app.agent.nodes.refund_node import refund_node
 from app.agent.nodes.size_node import size_node
+from app.agent.nodes.handoff_node import handoff_node
+from app.agent.nodes.refund_status_node import refund_status_node
 from app.agent.nodes.trace_node import trace_node
 from app.agent.nodes.answer_node import answer_node
 from app.agent.nodes.conversation_state_node import conversation_state_node
@@ -49,6 +51,11 @@ workflow.add_node("fallback", traced_node("fallback", fallback_node))
 workflow.add_node("order", traced_node("order", order_node))
 workflow.add_node("inventory", traced_node("inventory", inventory_node))
 workflow.add_node("size", traced_node("size", size_node))
+workflow.add_node("handoff", traced_node("handoff", handoff_node))
+workflow.add_node(
+    "refund_status",
+    traced_node("refund_status", refund_status_node),
+)
 workflow.add_node("answer", traced_node("answer", answer_node))
 workflow.add_node(
     "conversation_state",
@@ -71,6 +78,8 @@ workflow.add_conditional_edges(
         "order": "order",
         "inventory": "inventory",
         "size": "size",
+        "handoff": "handoff",
+        "refund_status": "refund_status",
     },
 )
 
@@ -82,6 +91,8 @@ workflow.add_edge("fallback", "answer")
 workflow.add_edge("order", "answer")
 workflow.add_edge("inventory", "answer")
 workflow.add_edge("size", "answer")
+workflow.add_edge("handoff", "answer")
+workflow.add_edge("refund_status", "answer")
 
 # answer → conversation_state → trace → 结束
 workflow.add_edge("answer", "conversation_state")

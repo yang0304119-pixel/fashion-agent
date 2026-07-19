@@ -20,7 +20,7 @@ def inventory_node(
     provider: InventoryProvider | None = None,
 ) -> dict:
     collected_slots = collect_slots(
-        "inventory_query",
+        state.get("intent", "inventory_query"),
         state.get("message", ""),
         state.get("collected_slots"),
     )

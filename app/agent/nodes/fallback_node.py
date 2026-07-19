@@ -22,6 +22,9 @@ def fallback_node(state: AgentState) -> dict:
     """对常见闲聊使用固定回复，其余问题给出业务范围引导。"""
     message = _normalize_message(state.get("message", ""))
 
+    if state.get("clarification_question"):
+        return _response(str(state["clarification_question"]), handled=True)
+
     if message in GREETING_MESSAGES:
         return _response(
             "您好，我可以帮您查询订单、库存、推荐尺码，"

@@ -16,11 +16,15 @@ from app.models.unresolved_case import UnresolvedCase
 logger = logging.getLogger(__name__)
 WORKFLOW_BY_INTENT = {
     "knowledge_query": "rag_workflow",
+    "product_query": "product_workflow",
     "order_query": "order_workflow",
     "inventory_query": "inventory_workflow",
     "size_recommend": "size_workflow",
     "composite_query": "react_readonly_workflow",
     "refund_request": "refund_workflow",
+    "refund_status_query": "refund_status_workflow",
+    "after_sales_request": "human_handoff_workflow",
+    "human_handoff": "human_handoff_workflow",
     "fallback": "fallback_workflow",
 }
 ERROR_STAGE_BY_NODE = {
@@ -31,6 +35,8 @@ ERROR_STAGE_BY_NODE = {
     "inventory": "inventory_query",
     "size": "size_recommend",
     "refund": "refund_validation",
+    "refund_status": "refund_status_query",
+    "handoff": "human_handoff",
     "answer": "tool_execution",
     "conversation_state": "conversation_state",
     "trace": "trace_persistence",
@@ -41,6 +47,8 @@ TOOL_BY_NODE = {
     "size": "size_service",
     "react": "react_readonly_tools",
     "refund": "refund_service",
+    "refund_status": "refund_query_service",
+    "handoff": "human_handoff",
     "rag": "rag_service",
 }
 
@@ -363,6 +371,10 @@ def _trace_output(state: AgentState) -> dict:
     return {
         "intent": state.get("intent"),
         "confidence": state.get("confidence"),
+        "intents": state.get("intents"),
+        "router_source": state.get("router_source"),
+        "router_evidence": state.get("router_evidence"),
+        "requires_planning": state.get("requires_planning"),
         "missing_slots": state.get("missing_slots"),
         "pending_intent": state.get("pending_intent"),
         "collected_slots": _safe_serialize(state.get("collected_slots")),
@@ -391,6 +403,8 @@ def _result_status(node_name: str, state: AgentState) -> tuple[str, dict[str, st
         "inventory",
         "size",
         "refund",
+        "refund_status",
+        "handoff",
     }
     if not observes_business_result:
         return "succeeded", {

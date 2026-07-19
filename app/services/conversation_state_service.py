@@ -14,8 +14,10 @@ PENDING_INTENTS = frozenset(
     {
         "order_query",
         "inventory_query",
+        "product_query",
         "size_recommend",
         "refund_request",
+        "refund_status_query",
     }
 )
 

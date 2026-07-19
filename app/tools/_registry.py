@@ -22,11 +22,29 @@ from app.tools.order_tool import query_order
 from app.tools.size_tool import size_recommend
 from app.tools.inventory_tool import query_inventory
 from app.tools.product_search_tool import search_products
+from app.tools.knowledge_tool import retrieve_knowledge
 
 
 # ── OpenAI function-calling 格式的工具定义 ──
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "retrieve_knowledge",
+            "description": "查询当前租户已上线的商品知识、店铺规则、洗护和售后政策。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "需要检索的知识问题",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -111,4 +129,5 @@ TOOL_HANDLERS: dict[str, Any] = {
     "size_recommend": size_recommend,
     "query_inventory": query_inventory,
     "search_products": search_products,
+    "retrieve_knowledge": retrieve_knowledge,
 }

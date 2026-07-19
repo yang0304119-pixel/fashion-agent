@@ -15,6 +15,7 @@ class ReactToolScopeTests(unittest.TestCase):
             "query_inventory",
             "size_recommend",
             "search_products",
+            "retrieve_knowledge",
         }
         definition_names = {
             definition["function"]["name"] for definition in TOOL_DEFINITIONS

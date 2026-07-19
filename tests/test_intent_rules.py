@@ -38,7 +38,7 @@ class IntentRuleTests(unittest.TestCase):
 
     def test_structured_product_questions_use_deterministic_product_service(self):
         for message in ("这件多少钱", "有哪些颜色", "有哪些尺码"):
-            self.assertEqual(classify_by_rules(message), "inventory_query")
+            self.assertEqual(classify_by_rules(message), "product_query")
 
     def test_measurement_only_size_question_does_not_need_llm(self):
         self.assertEqual(
