@@ -42,7 +42,10 @@ def rag_node(state: AgentState) -> dict:
         )
 
     try:
-        result = answer_question(message)
+        result = answer_question(
+            message,
+            tenant_id=state.get("tenant_id", 0),
+        )
     except FileNotFoundError as error:
         logger.exception(
             "RAG 知识库未初始化",

@@ -160,7 +160,12 @@ llm = ChatOpenAI(
 answer_chain = prompt | llm | StrOutputParser()
 
 
-def answer_question(question: str) -> dict:
+def answer_question(
+    question: str,
+    *,
+    tenant_id: int,
+    build_id: int | None = None,
+) -> dict:
     question = question.strip()
 
     if requires_business_tool(question):
@@ -174,7 +179,11 @@ def answer_question(question: str) -> dict:
             "requires_tool": True,
         }
 
-    documents = retrieve(question)
+    documents = retrieve(
+        question,
+        tenant_id=tenant_id,
+        build_id=build_id,
+    )
 
     if not documents:
         return {

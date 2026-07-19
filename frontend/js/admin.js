@@ -24,6 +24,7 @@ const state = {
   casesPage: 1,
   selectedCaseId: null,
   knowledgePage: 1,
+  knowledgeBuildsPage: 1,
   selectedKnowledgeDocumentId: null,
   selectedKnowledgeRevisionId: null,
   selectedRefund: null,
@@ -136,6 +137,8 @@ function bindEvents() {
   document.getElementById('approveKnowledgeBtn').addEventListener('click', approveSelectedKnowledgeRevision);
   document.getElementById('rejectKnowledgeBtn').addEventListener('click', rejectSelectedKnowledgeRevision);
   document.getElementById('knowledgeRevisionUploadForm').addEventListener('submit', uploadKnowledgeRevision);
+  document.getElementById('createKnowledgeBuildBtn').addEventListener('click', createKnowledgeBuild);
+  document.getElementById('rollbackKnowledgeBuildBtn').addEventListener('click', rollbackKnowledgeBuild);
   document.querySelectorAll('.metric-tab').forEach((tab) => {
     tab.addEventListener('click', () => selectStatus(tab.dataset.status));
   });
@@ -191,7 +194,7 @@ async function openCurrentView() {
     title.textContent = '知识文档';
     description.textContent = '上传、解析、修订和审核当前租户的商家知识。';
     refreshButton.textContent = '刷新文档';
-    await loadKnowledgeDocuments();
+    await Promise.all([loadKnowledgeDocuments(), loadKnowledgeBuilds()]);
   } else if (state.view === 'orders') {
     eyebrow.textContent = 'BUSINESS CONTEXT';
     title.textContent = '业务上下文';
@@ -249,7 +252,7 @@ async function refreshWorkspace() {
       await loadDashboard();
       showToast('运营总览已刷新。');
     } else if (state.view === 'knowledge') {
-      await loadKnowledgeDocuments();
+      await Promise.all([loadKnowledgeDocuments(), loadKnowledgeBuilds()]);
       showToast('知识文档已刷新。');
     } else if (state.view === 'orders') {
       await loadOrders();
@@ -296,6 +299,168 @@ async function loadKnowledgeDocuments() {
   } catch (error) {
     showErrorState(container, error.message);
     document.getElementById('adminKnowledgePagination').replaceChildren();
+  }
+}
+
+
+async function loadKnowledgeBuilds() {
+  const container = document.getElementById('knowledgeBuildsContent');
+  showLoadingState(container, '正在读取知识库版本…');
+  const params = new URLSearchParams({
+    page: state.knowledgeBuildsPage,
+    page_size: 10,
+  });
+  try {
+    const payload = await requestJson(`/api/admin/knowledge/index-builds?${params}`);
+    renderKnowledgeBuildSummary(payload.data);
+    renderKnowledgeBuilds(container, payload.data);
+    renderKnowledgeBuildsPagination(payload);
+  } catch (error) {
+    showErrorState(container, error.message);
+    document.getElementById('knowledgeBuildSummary').replaceChildren();
+    document.getElementById('knowledgeBuildsPagination').replaceChildren();
+  }
+}
+
+
+function renderKnowledgeBuildSummary(builds) {
+  const summary = document.getElementById('knowledgeBuildSummary');
+  const active = builds.find((build) => build.status === 'active');
+  const ready = builds.find((build) => build.status === 'ready');
+  const latest = builds[0];
+  summary.replaceChildren(
+    knowledgeBuildMetric('当前线上版本', active ? `Build #${active.id}` : '尚未上线'),
+    knowledgeBuildMetric('最新候选版本', ready ? `Build #${ready.id}` : '暂无候选'),
+    knowledgeBuildMetric('最近构建结果', latest ? knowledgeBuildStatusLabel(latest.status) : '尚未构建'),
+  );
+  document.getElementById('rollbackKnowledgeBuildBtn').disabled = !active?.previous_active_build_id;
+}
+
+
+function knowledgeBuildMetric(label, value) {
+  const card = document.createElement('article');
+  const labelNode = document.createElement('span');
+  labelNode.textContent = label;
+  const valueNode = document.createElement('strong');
+  valueNode.textContent = value;
+  card.append(labelNode, valueNode);
+  return card;
+}
+
+
+function renderKnowledgeBuilds(container, builds) {
+  if (!builds.length) {
+    showEmptyState(container, '尚无知识库版本', '审核知识文档后，可以创建第一个候选知识库。');
+    return;
+  }
+  const wrapper = element('div', 'table-wrap');
+  const table = element('table', 'data-table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['版本', '状态', '文档/Chunk', '构建时间', '上线时间', '错误', '操作'].forEach((label) => {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  head.appendChild(headRow);
+  const body = document.createElement('tbody');
+  builds.forEach((build) => {
+    const row = document.createElement('tr');
+    const actions = element('div', 'knowledge-actions-cell');
+    if (build.status === 'ready') {
+      actions.appendChild(actionButton('上线', 'primary', () => activateKnowledgeBuild(build.id)));
+    } else {
+      actions.appendChild(textCell(build.status === 'active' ? '消费者使用中' : '—'));
+    }
+    [
+      itemCell(`Build #${build.id}`, build.collection_name || '集合尚未创建'),
+      knowledgeBuildStatusCell(build.status),
+      textCell(`${build.document_count} / ${build.chunk_count}`),
+      textCell(formatDate(build.finished_at || build.started_at)),
+      textCell(formatDate(build.activated_at)),
+      textCell(build.error_message || '—'),
+      actions,
+    ].forEach((cell) => {
+      const td = document.createElement('td');
+      td.appendChild(cell);
+      row.appendChild(td);
+    });
+    body.appendChild(row);
+  });
+  table.append(head, body);
+  wrapper.appendChild(table);
+  container.replaceChildren(wrapper);
+}
+
+
+function renderKnowledgeBuildsPagination(payload) {
+  const container = document.getElementById('knowledgeBuildsPagination');
+  container.replaceChildren();
+  const totalPages = Math.max(1, Math.ceil(payload.total / payload.page_size));
+  if (payload.total === 0 || totalPages === 1) return;
+  const summary = document.createElement('span');
+  summary.textContent = `共 ${payload.total} 个版本 · 第 ${payload.page}/${totalPages} 页`;
+  const previous = actionButton('上一页', 'secondary', () => changeKnowledgeBuildPage(payload.page - 1));
+  const next = actionButton('下一页', 'secondary', () => changeKnowledgeBuildPage(payload.page + 1));
+  previous.disabled = payload.page <= 1;
+  next.disabled = payload.page >= totalPages;
+  container.append(summary, previous, next);
+}
+
+
+function changeKnowledgeBuildPage(page) {
+  state.knowledgeBuildsPage = page;
+  loadKnowledgeBuilds();
+}
+
+
+async function createKnowledgeBuild() {
+  const button = document.getElementById('createKnowledgeBuildBtn');
+  button.disabled = true;
+  try {
+    const payload = await requestJson('/api/admin/knowledge/index-builds', {
+      method: 'POST',
+    });
+    showToast(`候选知识库 Build #${payload.data.id} 构建成功，尚未影响消费者。`);
+    state.knowledgeBuildsPage = 1;
+    await loadKnowledgeBuilds();
+  } catch (error) {
+    showToast(error.message || '候选知识库构建失败，当前线上版本未受影响。', true);
+    await loadKnowledgeBuilds();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+
+async function activateKnowledgeBuild(buildId) {
+  try {
+    const payload = await requestJson(`/api/admin/knowledge/index-builds/${buildId}/activate`, {
+      method: 'POST',
+    });
+    showToast(`Build #${payload.data.id} 已上线，消费者开始使用新知识。`);
+    await loadKnowledgeBuilds();
+  } catch (error) {
+    showToast(error.message || '候选知识库上线失败。', true);
+  }
+}
+
+
+async function rollbackKnowledgeBuild() {
+  const button = document.getElementById('rollbackKnowledgeBuildBtn');
+  button.disabled = true;
+  try {
+    const payload = await requestJson('/api/admin/knowledge/index-builds/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_build_id: null }),
+    });
+    showToast(`已回滚到 Build #${payload.data.id}。`);
+    await loadKnowledgeBuilds();
+  } catch (error) {
+    showToast(error.message || '知识库回滚失败。', true);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1705,6 +1870,20 @@ function knowledgeStatusCell(status, kind) {
 }
 
 
+function knowledgeBuildStatusCell(status) {
+  const visualStatus = {
+    building: 'processing',
+    ready: 'approved',
+    active: 'succeeded',
+    superseded: 'shipped',
+    failed: 'failed',
+  }[status] || status;
+  const badge = element('span', `status ${visualStatus}`);
+  badge.textContent = knowledgeBuildStatusLabel(status);
+  return badge;
+}
+
+
 function actionButton(label, style, handler) {
   const button = element('button', `button ${style} small`);
   button.type = 'button';
@@ -1848,6 +2027,17 @@ function knowledgeQualityLabel(status) {
     passed: '质量检查通过',
     warning: '存在质量提醒',
   }[status] || '尚未检查';
+}
+
+
+function knowledgeBuildStatusLabel(status) {
+  return {
+    building: '构建中',
+    ready: '候选就绪',
+    active: '当前线上',
+    failed: '构建失败',
+    superseded: '历史成功版本',
+  }[status] || status || '未知';
 }
 
 

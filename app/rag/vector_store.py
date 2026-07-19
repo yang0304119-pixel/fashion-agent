@@ -5,6 +5,7 @@ from functools import lru_cache
 from uuid import uuid4
 
 import chromadb
+from chromadb.api.client import SharedSystemClient
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
@@ -116,6 +117,92 @@ def _open_collection(
     )
 
 
+def tenant_build_collection_name(*, tenant_id: int, build_id: int) -> str:
+    if tenant_id <= 0 or build_id <= 0:
+        raise ValueError("租户和知识库构建标识必须大于 0")
+    return f"{COLLECTION_NAME}_t{tenant_id}_build_{build_id}"
+
+
+def open_vector_store_by_name(collection_name: str) -> Chroma:
+    """只打开已存在且非空的指定集合，不创建空集合。"""
+    client = _get_chroma_client()
+    if collection_name not in _collection_names(client):
+        raise FileNotFoundError(
+            f"Chroma 知识库集合不存在: {collection_name}"
+        )
+    collection = client.get_collection(name=collection_name)
+    if collection.count() == 0:
+        raise FileNotFoundError(
+            f"Chroma 知识库集合为空: {collection_name}"
+        )
+    return _get_active_vector_store(collection_name)
+
+
+def build_vector_store_collection(
+    documents: list[Document],
+    *,
+    collection_name: str,
+) -> Chroma:
+    """构建候选集合；成功或失败都不会切换任何活跃版本。"""
+    if not documents:
+        raise ValueError("没有可以写入的 chunk")
+    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    if collection_name in _collection_names(client):
+        raise ValueError(f"Chroma 候选集合已存在: {collection_name}")
+    vector_store = _open_collection(client, collection_name, create=True)
+    try:
+        for start in range(0, len(documents), 100):
+            batch = documents[start:start + 100]
+            vector_store.add_documents(
+                documents=batch,
+                ids=[str(document.id) for document in batch],
+            )
+        collection = client.get_collection(name=collection_name)
+        actual_count = collection.count()
+        if actual_count != len(documents):
+            raise RuntimeError(
+                "Chroma 候选集合文档数校验失败: "
+                f"expected={len(documents)}, actual={actual_count}"
+            )
+        hnsw_configuration = collection.configuration.get("hnsw") or {}
+        actual_distance = hnsw_configuration.get("space")
+        if actual_distance != COLLECTION_DISTANCE:
+            raise RuntimeError(
+                "Chroma 距离算法校验失败: "
+                f"expected={COLLECTION_DISTANCE}, actual={actual_distance}"
+            )
+        _get_active_vector_store.cache_clear()
+        return vector_store
+    except Exception:
+        try:
+            client.delete_collection(name=collection_name)
+        except Exception:
+            logger.warning(
+                "失败的候选 Chroma 集合清理失败: %s",
+                collection_name,
+                exc_info=True,
+            )
+        _get_active_vector_store.cache_clear()
+        raise
+
+
+def delete_vector_store_collection(collection_name: str) -> None:
+    """删除明确指定的候选集合。"""
+    if not CHROMA_DIR.is_dir():
+        return
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    if collection_name in _collection_names(client):
+        client.delete_collection(name=collection_name)
+    _get_active_vector_store.cache_clear()
+
+
+def reset_vector_store_clients() -> None:
+    """清理进程内向量库缓存；主要用于测试和受控维护。"""
+    _get_active_vector_store.cache_clear()
+    SharedSystemClient.clear_system_cache()
+
+
 def _get_chroma_client() -> chromadb.ClientAPI:
     if not CHROMA_DIR.is_dir():
         raise FileNotFoundError(
@@ -171,6 +258,9 @@ def _delete_old_collections(
             collection_name == active_name
             or not collection_name.startswith(
                 COLLECTION_NAME
+            )
+            or collection_name.startswith(
+                f"{COLLECTION_NAME}_t"
             )
         ):
             continue

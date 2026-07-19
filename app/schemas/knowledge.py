@@ -94,3 +94,38 @@ class KnowledgeRejectRequest(BaseModel):
         if not normalized:
             raise ValueError("拒绝原因不能为空")
         return normalized
+
+
+class KnowledgeIndexBuildData(BaseModel):
+    id: int
+    status: str
+    collection_name: str | None
+    revision_snapshot: list[int]
+    document_count: int
+    chunk_count: int
+    triggered_by: int
+    error_code: str | None
+    error_message: str | None
+    previous_active_build_id: int | None
+    started_at: datetime
+    finished_at: datetime | None
+    activated_at: datetime | None
+    created_at: datetime | None
+
+
+class KnowledgeIndexBuildListResponse(BaseModel):
+    data: list[KnowledgeIndexBuildData]
+    total: int
+    page: int
+    page_size: int
+
+
+class KnowledgeIndexBuildResponse(BaseModel):
+    success: bool = True
+    data: KnowledgeIndexBuildData
+
+
+class KnowledgeRollbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_build_id: int | None = Field(default=None, gt=0)

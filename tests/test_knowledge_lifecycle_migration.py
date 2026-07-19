@@ -46,6 +46,14 @@ class KnowledgeLifecycleMigrationTests(unittest.TestCase):
                     "ix_knowledge_document_tenant_updated",
                     index_names,
                 )
+                build_columns = {
+                    row[1]
+                    for row in connection.execute(
+                        "PRAGMA table_info(knowledge_index_build)"
+                    )
+                }
+                self.assertIn("revision_snapshot", build_columns)
+                self.assertIn("previous_active_build_id", build_columns)
             finally:
                 connection.close()
 

@@ -17,7 +17,7 @@ from app.rag.query_rewriter import (
     infer_knowledge_type,
     rewrite_query,
 )
-from app.rag.vector_store import get_vector_store
+from app.rag.knowledge_index_resolver import resolve_vector_store
 
 
 def _document_key(document: Document) -> str:
@@ -30,8 +30,9 @@ def _document_key(document: Document) -> str:
 
 def _load_bm25_documents(
     knowledge_type: str | None,
+    *,
+    vector_store,
 ) -> list[Document]:
-    vector_store = get_vector_store()
     where = (
         {"type": knowledge_type}
         if knowledge_type
@@ -144,7 +145,12 @@ def _fuse_results(
     return ranked_documents
 
 
-def retrieve(query: str) -> list[Document]:
+def retrieve(
+    query: str,
+    *,
+    tenant_id: int,
+    build_id: int | None = None,
+) -> list[Document]:
     query = query.strip()
 
     if not query:
@@ -162,7 +168,10 @@ def retrieve(query: str) -> list[Document]:
     )
 
     try:
-        vector_store = get_vector_store()
+        vector_store = resolve_vector_store(
+            tenant_id=tenant_id,
+            build_id=build_id,
+        )
     except FileNotFoundError:
         raise
     except Exception as error:
@@ -193,7 +202,8 @@ def retrieve(query: str) -> list[Document]:
             )
         )
         bm25_documents = _load_bm25_documents(
-            knowledge_type
+            knowledge_type,
+            vector_store=vector_store,
         )
     except FileNotFoundError:
         raise

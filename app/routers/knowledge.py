@@ -17,6 +17,10 @@ from app.schemas.knowledge import (
     KnowledgeRejectRequest,
     KnowledgeRevisionData,
     KnowledgeRevisionResponse,
+    KnowledgeIndexBuildData,
+    KnowledgeIndexBuildListResponse,
+    KnowledgeIndexBuildResponse,
+    KnowledgeRollbackRequest,
 )
 from app.services.knowledge_document_service import (
     KNOWLEDGE_TYPES,
@@ -27,9 +31,125 @@ from app.services.knowledge_document_service import (
     latest_revision,
 )
 from app.services.knowledge_processing_service import KnowledgeProcessingError
+from app.services.knowledge_index_service import (
+    KnowledgeIndexBuildError,
+    KnowledgeIndexNotFoundError,
+    KnowledgeIndexService,
+    KnowledgeIndexStateError,
+)
 
 
 router = APIRouter(prefix="/admin/knowledge", tags=["admin-knowledge"])
+
+
+@router.get(
+    "/index-builds",
+    response_model=KnowledgeIndexBuildListResponse,
+)
+def list_knowledge_index_builds(
+    status: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeIndexBuildListResponse:
+    try:
+        result = KnowledgeIndexService(db).list_for_tenant(
+            tenant_id=admin.tenant_id,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    except KnowledgeIndexStateError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return KnowledgeIndexBuildListResponse(
+        data=[_index_build_data(build) for build in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+    )
+
+
+@router.post(
+    "/index-builds",
+    response_model=KnowledgeIndexBuildResponse,
+    status_code=201,
+)
+def create_knowledge_index_build(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeIndexBuildResponse:
+    try:
+        build = KnowledgeIndexService(db).create_candidate(
+            tenant_id=admin.tenant_id,
+            triggered_by=admin.id,
+        )
+    except KnowledgeIndexStateError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except KnowledgeIndexBuildError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return KnowledgeIndexBuildResponse(data=_index_build_data(build))
+
+
+@router.get(
+    "/index-builds/{build_id}",
+    response_model=KnowledgeIndexBuildResponse,
+)
+def get_knowledge_index_build(
+    build_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeIndexBuildResponse:
+    try:
+        build = KnowledgeIndexService(db).get_for_tenant(
+            tenant_id=admin.tenant_id,
+            build_id=build_id,
+        )
+    except KnowledgeIndexNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return KnowledgeIndexBuildResponse(data=_index_build_data(build))
+
+
+@router.post(
+    "/index-builds/{build_id}/activate",
+    response_model=KnowledgeIndexBuildResponse,
+)
+def activate_knowledge_index_build(
+    build_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeIndexBuildResponse:
+    try:
+        build = KnowledgeIndexService(db).activate(
+            tenant_id=admin.tenant_id,
+            build_id=build_id,
+        )
+    except KnowledgeIndexNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except KnowledgeIndexStateError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return KnowledgeIndexBuildResponse(data=_index_build_data(build))
+
+
+@router.post(
+    "/index-builds/rollback",
+    response_model=KnowledgeIndexBuildResponse,
+)
+def rollback_knowledge_index_build(
+    request: KnowledgeRollbackRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeIndexBuildResponse:
+    try:
+        build = KnowledgeIndexService(db).rollback(
+            tenant_id=admin.tenant_id,
+            target_build_id=request.target_build_id,
+        )
+    except KnowledgeIndexNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except KnowledgeIndexStateError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return KnowledgeIndexBuildResponse(data=_index_build_data(build))
 
 
 @router.get("/documents", response_model=KnowledgeDocumentListResponse)
@@ -316,4 +436,23 @@ def _revision_data(revision: KnowledgeRevision) -> KnowledgeRevisionData:
         review_reason=revision.review_reason,
         created_at=revision.created_at,
         updated_at=revision.updated_at,
+    )
+
+
+def _index_build_data(build) -> KnowledgeIndexBuildData:
+    return KnowledgeIndexBuildData(
+        id=build.id,
+        status=build.status,
+        collection_name=build.collection_name,
+        revision_snapshot=list(build.revision_snapshot or []),
+        document_count=build.document_count,
+        chunk_count=build.chunk_count,
+        triggered_by=build.triggered_by,
+        error_code=build.error_code,
+        error_message=build.error_message,
+        previous_active_build_id=build.previous_active_build_id,
+        started_at=build.started_at,
+        finished_at=build.finished_at,
+        activated_at=build.activated_at,
+        created_at=build.created_at,
     )

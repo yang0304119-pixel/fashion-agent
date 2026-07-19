@@ -147,3 +147,60 @@ class KnowledgeRevision(Base):
         "KnowledgeDocument",
         back_populates="revisions",
     )
+
+
+class KnowledgeIndexBuild(Base):
+    """租户级候选知识库构建及活跃版本记录。"""
+
+    __tablename__ = "knowledge_index_build"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('building', 'ready', 'active', 'failed', 'superseded')",
+            name="ck_knowledge_index_build_status",
+        ),
+        Index(
+            "ix_knowledge_index_build_tenant_created",
+            "tenant_id",
+            "created_at",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(
+        Integer,
+        ForeignKey("tenant.id"),
+        nullable=False,
+        index=True,
+    )
+    status = Column(
+        String(20),
+        nullable=False,
+        default="building",
+        index=True,
+    )
+    collection_name = Column(String(200), nullable=True, unique=True)
+    revision_snapshot = Column(JSON, nullable=False, default=list)
+    document_count = Column(Integer, nullable=False, default=0)
+    chunk_count = Column(Integer, nullable=False, default=0)
+    triggered_by = Column(
+        Integer,
+        ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    error_code = Column(String(100), nullable=True)
+    error_message = Column(String(500), nullable=True)
+    previous_active_build_id = Column(
+        Integer,
+        ForeignKey("knowledge_index_build.id"),
+        nullable=True,
+        index=True,
+    )
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    activated_at = Column(DateTime, nullable=True)
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )

@@ -75,6 +75,10 @@ class ApiTestCase(unittest.TestCase):
             ),
             patch("app.agent.nodes.refund_node.SessionLocal", self.Session),
             patch("app.providers.factory.SessionLocal", self.Session),
+            patch(
+                "app.rag.knowledge_index_resolver.SessionLocal",
+                self.Session,
+            ),
             patch("app.services.trace_service.SessionLocal", self.Session),
         ]
         for session_patch in self.session_patches:

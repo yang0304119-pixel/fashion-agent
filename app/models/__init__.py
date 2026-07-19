@@ -14,7 +14,11 @@ from app.models.agent_trace import AgentTrace
 from app.models.agent_trace_step import AgentTraceStep
 from app.models.unresolved_case import UnresolvedCase
 from app.models.conversation_state import ConversationState
-from app.models.knowledge_document import KnowledgeDocument, KnowledgeRevision
+from app.models.knowledge_document import (
+    KnowledgeDocument,
+    KnowledgeIndexBuild,
+    KnowledgeRevision,
+)
 
 __all__ = [
     "User",
@@ -29,4 +33,5 @@ __all__ = [
     "ConversationState",
     "KnowledgeDocument",
     "KnowledgeRevision",
+    "KnowledgeIndexBuild",
 ]

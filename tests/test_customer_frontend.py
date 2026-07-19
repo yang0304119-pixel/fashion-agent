@@ -169,6 +169,8 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn('data-admin-panel="knowledge"', html)
         self.assertIn('id="knowledgeUploadForm"', html)
         self.assertIn('id="knowledgeContentEditor"', html)
+        self.assertIn('id="createKnowledgeBuildBtn"', html)
+        self.assertIn('id="rollbackKnowledgeBuildBtn"', html)
         self.assertIn('id="approveKnowledgeBtn"', html)
         self.assertIn('id="rejectKnowledgeBtn"', html)
         self.assertIn("/api/admin/knowledge/documents", script)
@@ -176,7 +178,10 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn("/content", script)
         self.assertIn("/approve", script)
         self.assertIn("/reject", script)
-        self.assertIn("本阶段不会自动修改线上 Chroma", script)
+        self.assertIn("/api/admin/knowledge/index-builds", script)
+        self.assertIn("/activate", script)
+        self.assertIn("/rollback", script)
+        self.assertIn("当前线上版本未受影响", script)
         self.assertNotIn("tenant_id", html)
 
     def test_customer_and_admin_pages_show_mock_money_warning(self):

@@ -73,6 +73,40 @@ CREATE INDEX IF NOT EXISTS ix_knowledge_revision_reviewed_by
     ON knowledge_revision (reviewed_by);
 CREATE INDEX IF NOT EXISTS ix_knowledge_revision_document_created
     ON knowledge_revision (document_id, created_at);
+
+CREATE TABLE IF NOT EXISTS knowledge_index_build (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'building',
+    collection_name VARCHAR(200),
+    revision_snapshot JSON NOT NULL DEFAULT '[]',
+    document_count INTEGER NOT NULL DEFAULT 0,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    triggered_by INTEGER NOT NULL,
+    error_code VARCHAR(100),
+    error_message VARCHAR(500),
+    previous_active_build_id INTEGER,
+    started_at DATETIME NOT NULL,
+    finished_at DATETIME,
+    activated_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_knowledge_index_build_collection UNIQUE (collection_name),
+    CONSTRAINT ck_knowledge_index_build_status
+        CHECK (status IN ('building', 'ready', 'active', 'failed', 'superseded')),
+    FOREIGN KEY(tenant_id) REFERENCES tenant(id),
+    FOREIGN KEY(triggered_by) REFERENCES "user"(id),
+    FOREIGN KEY(previous_active_build_id) REFERENCES knowledge_index_build(id)
+);
+CREATE INDEX IF NOT EXISTS ix_knowledge_index_build_tenant_id
+    ON knowledge_index_build (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_knowledge_index_build_status
+    ON knowledge_index_build (status);
+CREATE INDEX IF NOT EXISTS ix_knowledge_index_build_triggered_by
+    ON knowledge_index_build (triggered_by);
+CREATE INDEX IF NOT EXISTS ix_knowledge_index_build_previous_active
+    ON knowledge_index_build (previous_active_build_id);
+CREATE INDEX IF NOT EXISTS ix_knowledge_index_build_tenant_created
+    ON knowledge_index_build (tenant_id, created_at);
 """
 
 
@@ -112,6 +146,19 @@ def verify(database_path: Path) -> None:
                 "quality_report",
                 "created_by",
                 "reviewed_by",
+            },
+            "knowledge_index_build": {
+                "tenant_id",
+                "status",
+                "collection_name",
+                "revision_snapshot",
+                "document_count",
+                "chunk_count",
+                "triggered_by",
+                "previous_active_build_id",
+                "started_at",
+                "finished_at",
+                "activated_at",
             },
         }
         for table, columns in expected.items():

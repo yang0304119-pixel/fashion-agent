@@ -55,7 +55,7 @@ def init_db():
     from app.models import (  # noqa: F401
         Tenant, User, Product, Order, Ticket, RefundRequest,
         AgentTrace, AgentTraceStep, UnresolvedCase, ConversationState,
-        KnowledgeDocument, KnowledgeRevision,
+        KnowledgeDocument, KnowledgeRevision, KnowledgeIndexBuild,
     )
 
     Base.metadata.create_all(bind=engine)
