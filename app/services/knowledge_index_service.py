@@ -13,6 +13,7 @@ from app.models.knowledge_document import (
     KnowledgeIndexBuild,
     KnowledgeRevision,
 )
+from app.models.unresolved_case import UnresolvedCase
 from app.rag.security import sanitize_document_content
 from app.rag.text_splitter import split_knowledge_documents
 from app.rag.vector_store import (
@@ -22,6 +23,7 @@ from app.rag.vector_store import (
     tenant_build_collection_name,
 )
 from app.services.knowledge_storage import KnowledgeStorage
+from app.services.knowledge_validity import is_effective, utc_now
 from app.services.query_page import QueryPage, validate_pagination
 
 
@@ -256,6 +258,7 @@ class KnowledgeIndexService:
             current.status = "superseded"
         build.status = "active"
         build.activated_at = now
+        self._close_linked_cases(build=build, now=now)
         self.db.commit()
         self.db.refresh(build)
         return build
@@ -285,15 +288,38 @@ class KnowledgeIndexService:
         target.status = "active"
         target.previous_active_build_id = current.id
         target.activated_at = now
+        self._close_linked_cases(build=target, now=now)
         self.db.commit()
         self.db.refresh(target)
         return target
+
+    def _close_linked_cases(
+        self,
+        *,
+        build: KnowledgeIndexBuild,
+        now: datetime,
+    ) -> None:
+        revision_ids = [int(value) for value in (build.revision_snapshot or [])]
+        if not revision_ids:
+            return
+        cases = self.db.query(UnresolvedCase).filter(
+            UnresolvedCase.tenant_id == build.tenant_id,
+            UnresolvedCase.knowledge_revision_id.in_(revision_ids),
+            UnresolvedCase.is_resolved.is_not(True),
+        ).all()
+        for case in cases:
+            case.is_resolved = True
+            case.should_add_to_kb = False
+            case.resolved_by_build_id = build.id
+            case.auto_resolved_at = now
+            case.updated_at = now
 
     def _latest_approved_revisions(
         self,
         *,
         tenant_id: int,
     ) -> list[KnowledgeRevision]:
+        now = utc_now()
         latest_approved = (
             self.db.query(
                 KnowledgeRevision.document_id.label("document_id"),
@@ -304,6 +330,14 @@ class KnowledgeIndexService:
                 KnowledgeDocument.tenant_id == tenant_id,
                 KnowledgeRevision.parse_status == "succeeded",
                 KnowledgeRevision.review_status == "approved",
+                (
+                    KnowledgeRevision.effective_at.is_(None)
+                    | (KnowledgeRevision.effective_at <= now)
+                ),
+                (
+                    KnowledgeRevision.expires_at.is_(None)
+                    | (KnowledgeRevision.expires_at > now)
+                ),
             )
             .group_by(KnowledgeRevision.document_id)
             .subquery()
@@ -329,6 +363,11 @@ class KnowledgeIndexService:
     ) -> Document:
         if revision.document.tenant_id != tenant_id:
             raise KnowledgeIndexStateError("知识版本租户归属不一致")
+        if not is_effective(
+            effective_at=revision.effective_at,
+            expires_at=revision.expires_at,
+        ):
+            raise KnowledgeIndexStateError("知识版本尚未生效或已经过期")
         if not revision.processed_storage_key:
             raise KnowledgeIndexStateError("审核知识缺少解析内容")
         path = self.storage.path_for_key(revision.processed_storage_key)
@@ -361,6 +400,14 @@ class KnowledgeIndexService:
                 "source_sha256": revision.source_sha256,
                 "processed_sha256": revision.processed_sha256 or "",
                 "file_type": revision.source_file_type,
+                "effective_at": (
+                    revision.effective_at.isoformat()
+                    if revision.effective_at else ""
+                ),
+                "expires_at": (
+                    revision.expires_at.isoformat()
+                    if revision.expires_at else ""
+                ),
                 "sanitized_instruction_lines": (
                     sanitized.removed_instruction_lines
                 ),

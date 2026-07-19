@@ -13,6 +13,7 @@ from app.rag.processor import analyze_processed_text, approve_processed_knowledg
 from app.services.knowledge_processing_service import KnowledgeProcessingService
 from app.services.knowledge_storage import KnowledgeStorage, KnowledgeStorageError
 from app.services.query_page import QueryPage, validate_pagination
+from app.services.knowledge_validity import lifecycle_status
 
 
 KNOWLEDGE_TYPES = frozenset({
@@ -432,6 +433,30 @@ class KnowledgeDocumentService:
         self.db.refresh(revision)
         return revision
 
+    def update_validity(
+        self,
+        *,
+        tenant_id: int,
+        revision_id: int,
+        effective_at: datetime | None,
+        expires_at: datetime | None,
+    ) -> KnowledgeRevision:
+        revision = self.get_revision_for_tenant(
+            tenant_id=tenant_id,
+            revision_id=revision_id,
+        )
+        effective_at = _naive_utc(effective_at)
+        expires_at = _naive_utc(expires_at)
+        if expires_at is not None and effective_at is not None and expires_at <= effective_at:
+            raise KnowledgeDocumentValidationError("过期时间必须晚于生效时间")
+        revision.effective_at = effective_at
+        revision.expires_at = expires_at
+        revision.updated_at = _utc_now()
+        revision.document.updated_at = revision.updated_at
+        self.db.commit()
+        self.db.refresh(revision)
+        return revision
+
     def reject_revision(
         self,
         *,
@@ -481,6 +506,13 @@ def latest_revision(document: KnowledgeDocument) -> KnowledgeRevision:
     return max(document.revisions, key=lambda item: item.version_no)
 
 
+def revision_lifecycle_status(revision: KnowledgeRevision) -> str:
+    return lifecycle_status(
+        effective_at=revision.effective_at,
+        expires_at=revision.expires_at,
+    )
+
+
 def _validate_document_metadata(
     title: str,
     knowledge_type: str,
@@ -516,6 +548,14 @@ def _normalized_text(value: object) -> str | None:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _naive_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _file_sha256(path: Path) -> str:

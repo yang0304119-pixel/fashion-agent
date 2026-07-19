@@ -1,7 +1,15 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from app.models import AgentTrace, RefundRequest, Ticket, UnresolvedCase
+from app.models import (
+    AgentTrace,
+    KnowledgeDocument,
+    KnowledgeIndexBuild,
+    KnowledgeRevision,
+    RefundRequest,
+    Ticket,
+    UnresolvedCase,
+)
 from tests.api_test_support import (
     ADMIN_PASSWORD,
     CUSTOMER_PASSWORD,
@@ -141,6 +149,10 @@ class AdminApiTests(ApiTestCase):
             "pending_tickets": 1,
             "unresolved_cases": 1,
             "today_sessions": 1,
+            "pending_knowledge_reviews": 0,
+            "ready_knowledge_builds": 0,
+            "expiring_soon_knowledge": 0,
+            "expired_knowledge": 0,
         })
 
     def test_dashboard_requires_admin_role(self):
@@ -150,6 +162,37 @@ class AdminApiTests(ApiTestCase):
             headers=self.auth_headers(customer_token),
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_dashboard_knowledge_metrics_are_tenant_scoped(self):
+        now = datetime.now(UTC).replace(tzinfo=None)
+        db = self.Session()
+        db.add_all([
+            KnowledgeDocument(id=101, tenant_id=1, title="待审核", knowledge_type="faq", category="测试", created_by=3),
+            KnowledgeDocument(id=102, tenant_id=1, title="即将过期", knowledge_type="faq", category="测试", created_by=3),
+            KnowledgeDocument(id=103, tenant_id=1, title="已过期", knowledge_type="faq", category="测试", created_by=3),
+            KnowledgeDocument(id=201, tenant_id=2, title="其他租户", knowledge_type="faq", category="测试", created_by=5),
+        ])
+        db.flush()
+        db.add_all([
+            KnowledgeRevision(document_id=101, version_no=1, original_filename="a.md", source_file_type="md", raw_storage_key="a", source_sha256="a" * 64, parse_status="succeeded", review_status="pending", created_by=3),
+            KnowledgeRevision(document_id=102, version_no=1, original_filename="b.md", source_file_type="md", raw_storage_key="b", source_sha256="b" * 64, parse_status="succeeded", review_status="approved", expires_at=now + timedelta(days=2), created_by=3),
+            KnowledgeRevision(document_id=103, version_no=1, original_filename="c.md", source_file_type="md", raw_storage_key="c", source_sha256="c" * 64, parse_status="succeeded", review_status="approved", expires_at=now - timedelta(days=1), created_by=3),
+            KnowledgeRevision(document_id=201, version_no=1, original_filename="d.md", source_file_type="md", raw_storage_key="d", source_sha256="d" * 64, parse_status="succeeded", review_status="approved", expires_at=now - timedelta(days=1), created_by=5),
+            KnowledgeIndexBuild(tenant_id=1, status="ready", revision_snapshot=[], document_count=0, chunk_count=0, triggered_by=3, started_at=now),
+            KnowledgeIndexBuild(tenant_id=2, status="ready", revision_snapshot=[], document_count=0, chunk_count=0, triggered_by=5, started_at=now),
+        ])
+        db.commit()
+        db.close()
+        response = self.client.get(
+            "/api/admin/dashboard",
+            headers=self.auth_headers(self.login("admin_a", ADMIN_PASSWORD)),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+        self.assertEqual(data["pending_knowledge_reviews"], 1)
+        self.assertEqual(data["ready_knowledge_builds"], 1)
+        self.assertEqual(data["expiring_soon_knowledge"], 1)
+        self.assertEqual(data["expired_knowledge"], 1)
 
     def test_admin_only_sees_current_tenant_data(self):
         token = self.login("admin_a", ADMIN_PASSWORD)

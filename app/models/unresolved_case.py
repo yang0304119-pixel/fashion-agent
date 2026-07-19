@@ -35,6 +35,25 @@ class UnresolvedCase(Base):
     human_label_intent = Column(String(50), nullable=True, comment="人工标注的正确意图")
     human_label_answer = Column(Text, nullable=True, comment="人工修正的答案")
     should_add_to_kb = Column(Boolean, default=False, comment="是否需要补充知识库")
+    knowledge_document_id = Column(
+        Integer,
+        ForeignKey("knowledge_document.id"),
+        nullable=True,
+        index=True,
+    )
+    knowledge_revision_id = Column(
+        Integer,
+        ForeignKey("knowledge_revision.id"),
+        nullable=True,
+        index=True,
+    )
+    resolved_by_build_id = Column(
+        Integer,
+        ForeignKey("knowledge_index_build.id"),
+        nullable=True,
+        index=True,
+    )
+    auto_resolved_at = Column(DateTime, nullable=True)
     reviewed_by = Column(
         Integer,
         ForeignKey("user.id"),

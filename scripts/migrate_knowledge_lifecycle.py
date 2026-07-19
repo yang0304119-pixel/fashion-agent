@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS knowledge_revision (
     reviewed_by INTEGER,
     reviewed_at DATETIME,
     review_reason TEXT,
+    effective_at DATETIME,
+    expires_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_knowledge_revision_document_version
@@ -73,7 +75,6 @@ CREATE INDEX IF NOT EXISTS ix_knowledge_revision_reviewed_by
     ON knowledge_revision (reviewed_by);
 CREATE INDEX IF NOT EXISTS ix_knowledge_revision_document_created
     ON knowledge_revision (document_id, created_at);
-
 CREATE TABLE IF NOT EXISTS knowledge_index_build (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id INTEGER NOT NULL,
@@ -115,6 +116,35 @@ def migrate(database_path: Path) -> None:
     try:
         connection.execute("PRAGMA foreign_keys=ON")
         connection.executescript(KNOWLEDGE_LIFECYCLE_SCHEMA)
+        _ensure_columns(connection, "knowledge_revision", {
+            "effective_at": "DATETIME",
+            "expires_at": "DATETIME",
+        })
+        connection.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS ix_knowledge_revision_effective_at
+                ON knowledge_revision (effective_at);
+            CREATE INDEX IF NOT EXISTS ix_knowledge_revision_expires_at
+                ON knowledge_revision (expires_at);
+            """
+        )
+        if _table_exists(connection, "unresolved_case"):
+            _ensure_columns(connection, "unresolved_case", {
+                "knowledge_document_id": "INTEGER",
+                "knowledge_revision_id": "INTEGER",
+                "resolved_by_build_id": "INTEGER",
+                "auto_resolved_at": "DATETIME",
+            })
+            connection.executescript(
+                """
+                CREATE INDEX IF NOT EXISTS ix_unresolved_case_knowledge_document
+                    ON unresolved_case (knowledge_document_id);
+                CREATE INDEX IF NOT EXISTS ix_unresolved_case_knowledge_revision
+                    ON unresolved_case (knowledge_revision_id);
+                CREATE INDEX IF NOT EXISTS ix_unresolved_case_resolved_build
+                    ON unresolved_case (resolved_by_build_id);
+                """
+            )
         connection.commit()
     finally:
         connection.close()
@@ -146,6 +176,8 @@ def verify(database_path: Path) -> None:
                 "quality_report",
                 "created_by",
                 "reviewed_by",
+                "effective_at",
+                "expires_at",
             },
             "knowledge_index_build": {
                 "tenant_id",
@@ -175,8 +207,49 @@ def verify(database_path: Path) -> None:
             missing = columns - actual
             if missing:
                 raise RuntimeError(f"{table}表缺少字段: {sorted(missing)}")
+        if _table_exists(connection, "unresolved_case"):
+            actual = {
+                item[1]
+                for item in connection.execute(
+                    "PRAGMA table_info(unresolved_case)"
+                )
+            }
+            expected_case = {
+                "knowledge_document_id",
+                "knowledge_revision_id",
+                "resolved_by_build_id",
+                "auto_resolved_at",
+            }
+            missing = expected_case - actual
+            if missing:
+                raise RuntimeError(
+                    f"unresolved_case表缺少知识闭环字段: {sorted(missing)}"
+                )
     finally:
         connection.close()
+
+
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    return connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone() is not None
+
+
+def _ensure_columns(
+    connection: sqlite3.Connection,
+    table: str,
+    columns: dict[str, str],
+) -> None:
+    actual = {
+        item[1]
+        for item in connection.execute(f"PRAGMA table_info({table})")
+    }
+    for name, definition in columns.items():
+        if name not in actual:
+            connection.execute(
+                f"ALTER TABLE {table} ADD COLUMN {name} {definition}"
+            )
 
 
 def main() -> None:

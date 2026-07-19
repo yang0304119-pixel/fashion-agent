@@ -131,6 +131,8 @@ class KnowledgeRevision(Base):
     )
     reviewed_at = Column(DateTime, nullable=True)
     review_reason = Column(Text, nullable=True)
+    effective_at = Column(DateTime, nullable=True, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(
         DateTime,
         nullable=False,

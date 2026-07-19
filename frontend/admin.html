@@ -77,6 +77,26 @@
             <strong id="dashboardTodaySessions">—</strong>
             <p>北京时间今日去重会话数</p>
           </a>
+          <a class="dashboard-card actionable" href="#knowledge">
+            <span class="dashboard-card-label">待审核知识版本</span>
+            <strong id="dashboardPendingKnowledgeReviews">—</strong>
+            <p>解析完成但尚未通过人工审核</p>
+          </a>
+          <a class="dashboard-card actionable" href="#knowledge">
+            <span class="dashboard-card-label">待上线候选版本</span>
+            <strong id="dashboardReadyKnowledgeBuilds">—</strong>
+            <p>构建成功、等待测试与显式上线</p>
+          </a>
+          <a class="dashboard-card actionable warning" href="#knowledge">
+            <span class="dashboard-card-label">即将过期知识</span>
+            <strong id="dashboardExpiringKnowledge">—</strong>
+            <p>未来七天内到期，需要更新规则</p>
+          </a>
+          <a class="dashboard-card actionable warning" href="#knowledge">
+            <span class="dashboard-card-label">已过期知识</span>
+            <strong id="dashboardExpiredKnowledge">—</strong>
+            <p>构建与检索均已停止使用</p>
+          </a>
         </section>
         <section class="dashboard-note">
           <div>
@@ -438,6 +458,22 @@
         <label>人工正确答案
           <textarea id="caseHumanAnswer" maxlength="4000" placeholder="填写复核后的正确答案"></textarea>
         </label>
+        <div class="case-knowledge-draft-panel">
+          <strong>FAQ 知识草稿</strong>
+          <p>先保存人工正确答案，再生成待审核 FAQ 文档。知识上线后系统会自动关闭此案例。</p>
+          <label>草稿标题（可选）
+            <input id="caseDraftTitle" maxlength="200" placeholder="默认使用用户原问题生成标题">
+          </label>
+          <div class="case-draft-validity">
+            <label>生效时间
+              <input id="caseDraftEffectiveAt" type="datetime-local">
+            </label>
+            <label>过期时间
+              <input id="caseDraftExpiresAt" type="datetime-local">
+            </label>
+          </div>
+          <button class="button secondary" id="createCaseKnowledgeDraftBtn" type="button">生成 FAQ 草稿</button>
+        </div>
         <label class="checkbox-row">
           <input id="caseShouldAddToKb" type="checkbox">
           <span>标记为知识库候选</span>
@@ -506,6 +542,19 @@
       <label class="knowledge-editor-label">解析后内容
         <textarea id="knowledgeContentEditor" spellcheck="false" placeholder="文档解析成功后可在这里预览和修订内容"></textarea>
       </label>
+      <section class="knowledge-validity-panel">
+        <strong>知识有效期</strong>
+        <p>未设置表示立即生效且长期有效；过期内容不会进入新构建，也不会被已有索引召回。</p>
+        <div>
+          <label>生效时间
+            <input id="knowledgeEffectiveAt" type="datetime-local">
+          </label>
+          <label>过期时间
+            <input id="knowledgeExpiresAt" type="datetime-local">
+          </label>
+          <button class="button secondary" id="saveKnowledgeValidityBtn" type="button">保存有效期</button>
+        </div>
+      </section>
       <p class="form-error" id="knowledgeDetailError" role="alert"></p>
       <div class="knowledge-review-actions">
         <button class="button secondary" id="parseKnowledgeBtn" type="button">开始解析</button>

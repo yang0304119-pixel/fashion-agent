@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.knowledge_document import KnowledgeIndexBuild
 from app.rag.retriever import retrieve
+from app.rag.knowledge_index_resolver import current_revision_validity
 from app.rag.security import safe_relative_source
 from app.rag.service import answer_from_documents
 from app.services.knowledge_index_service import (
@@ -54,6 +55,14 @@ class KnowledgeTestService:
             documents=documents,
         )
         first_metadata = documents[0].metadata if documents else {}
+        validity = current_revision_validity(
+            tenant_id=tenant_id,
+            revision_ids={
+                int(document.metadata["revision_id"])
+                for document in documents
+                if document.metadata.get("revision_id") is not None
+            },
+        )
         return KnowledgeTestResult(
             build=build,
             answer=answer_result["answer"],
@@ -67,18 +76,20 @@ class KnowledgeTestService:
                 str(first_metadata.get("knowledge_type_filter")) or None
             ),
             hits=[
-                _safe_hit(document, rank)
+                _safe_hit(document, rank, validity=validity)
                 for rank, document in enumerate(documents, start=1)
             ],
         )
 
 
-def _safe_hit(document, rank: int) -> dict:
+def _safe_hit(document, rank: int, *, validity: dict) -> dict:
     metadata = document.metadata
     content = str(document.page_content).strip()
     preview = content[:MAX_PREVIEW_CHARACTERS]
     if len(content) > MAX_PREVIEW_CHARACTERS:
         preview = f"{preview}…"
+    revision_id = _positive_int(metadata.get("revision_id"))
+    effective_at, expires_at = validity.get(revision_id, (None, None))
     return {
         "rank": rank,
         "source_id": f"S{rank}",
@@ -86,7 +97,7 @@ def _safe_hit(document, rank: int) -> dict:
         "knowledge_type": str(metadata.get("knowledge_type", "")),
         "category": str(metadata.get("category", "")),
         "document_id": _positive_int(metadata.get("document_id")),
-        "revision_id": _positive_int(metadata.get("revision_id")),
+        "revision_id": revision_id,
         "version_no": _positive_int(metadata.get("version_no")),
         "chunk_id": str(
             metadata.get("chunk_id")
@@ -103,6 +114,8 @@ def _safe_hit(document, rank: int) -> dict:
         "bm25_rank": _positive_int(metadata.get("bm25_rank"), zero=True),
         "fusion_score": _score(metadata.get("fusion_score")),
         "fusion_rank": _positive_int(metadata.get("fusion_rank"), zero=True),
+        "effective_at": effective_at,
+        "expires_at": expires_at,
     }
 
 

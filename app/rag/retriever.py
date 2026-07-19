@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 
 from langchain_core.documents import Document
 
@@ -17,7 +18,11 @@ from app.rag.query_rewriter import (
     infer_knowledge_type,
     rewrite_query,
 )
-from app.rag.knowledge_index_resolver import resolve_vector_store
+from app.rag.knowledge_index_resolver import (
+    current_revision_validity,
+    resolve_vector_store,
+)
+from app.services.knowledge_validity import is_effective, utc_now
 
 
 def _document_key(document: Document) -> str:
@@ -26,6 +31,57 @@ def _document_key(document: Document) -> str:
         or document.id
         or document.metadata.get("doc_id", "")
     )
+
+
+def _metadata_datetime(value: object) -> datetime | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _document_is_effective(document: Document, *, now: datetime) -> bool:
+    metadata = document.metadata
+    return is_effective(
+        effective_at=_metadata_datetime(metadata.get("effective_at")),
+        expires_at=_metadata_datetime(metadata.get("expires_at")),
+        now=now,
+    )
+
+
+def _current_effective_documents(
+    documents: list[Document],
+    *,
+    tenant_id: int,
+    now: datetime,
+) -> list[Document]:
+    revision_ids = {
+        int(document.metadata["revision_id"])
+        for document in documents
+        if document.metadata.get("revision_id") is not None
+    }
+    current_validity = current_revision_validity(
+        tenant_id=tenant_id,
+        revision_ids=revision_ids,
+    )
+    return [
+        document
+        for document in documents
+        if (
+            document.metadata.get("revision_id") is None
+            or (
+                int(document.metadata["revision_id"]) in current_validity
+                and is_effective(
+                    effective_at=current_validity[int(document.metadata["revision_id"])][0],
+                    expires_at=current_validity[int(document.metadata["revision_id"])][1],
+                    now=now,
+                )
+            )
+        )
+    ]
 
 
 def _load_bm25_documents(
@@ -230,6 +286,36 @@ def retrieve(
             stage="retrieval",
             cause=error,
         ) from error
+    now = utc_now()
+    dense_results = [
+        (document, score)
+        for document, score in dense_results
+        if _document_is_effective(document, now=now)
+    ]
+    bm25_documents = [
+        document
+        for document in bm25_documents
+        if _document_is_effective(document, now=now)
+    ]
+    dense_documents = _current_effective_documents(
+        [document for document, _ in dense_results],
+        tenant_id=tenant_id,
+        now=now,
+    )
+    allowed_dense_keys = {
+        _document_key(document)
+        for document in dense_documents
+    }
+    dense_results = [
+        (document, score)
+        for document, score in dense_results
+        if _document_key(document) in allowed_dense_keys
+    ]
+    bm25_documents = _current_effective_documents(
+        bm25_documents,
+        tenant_id=tenant_id,
+        now=now,
+    )
     bm25_results = search_bm25(
         f"{query} {rewritten_query}",
         bm25_documents,

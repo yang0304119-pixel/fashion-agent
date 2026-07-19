@@ -2,12 +2,18 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from io import BytesIO
 
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session, aliased
 
 from app.models.unresolved_case import UnresolvedCase
 from app.models.user import User
+from app.services.knowledge_document_service import (
+    KnowledgeDocumentService,
+    KnowledgeDocumentValidationError,
+)
+from app.services.knowledge_processing_service import KnowledgeProcessingError
 from app.services.query_page import QueryPage, validate_pagination
 
 
@@ -183,6 +189,75 @@ class UnresolvedCaseService:
         self.db.commit()
         return self.get_for_tenant(tenant_id=tenant_id, case_id=case_id)
 
+    def create_faq_draft(
+        self,
+        *,
+        tenant_id: int,
+        case_id: int,
+        created_by: int,
+        title: str | None,
+        category: str,
+        effective_at: datetime | None,
+        expires_at: datetime | None,
+    ) -> tuple[UnresolvedCaseSummary, int, int]:
+        case = self.db.query(UnresolvedCase).filter(
+            UnresolvedCase.id == case_id,
+            UnresolvedCase.tenant_id == tenant_id,
+        ).first()
+        if case is None:
+            raise UnresolvedCaseNotFoundError("未解决案例不存在")
+        answer = _normalized_text(case.human_label_answer)
+        if not answer:
+            raise UnresolvedCaseValidationError("生成 FAQ 草稿前必须填写人工正确答案")
+        if case.knowledge_revision_id is not None:
+            raise UnresolvedCaseValidationError("该案例已经生成知识草稿")
+        draft_title = _normalized_text(title) or _draft_title(case.user_message)
+        markdown = (
+            f"# {draft_title}\n\n"
+            f"## 问题\n\n{case.user_message.strip()}\n\n"
+            f"## 回答\n\n{answer}\n"
+        )
+        service = KnowledgeDocumentService(self.db)
+        try:
+            document = service.create_document(
+                tenant_id=tenant_id,
+                created_by=created_by,
+                title=draft_title,
+                knowledge_type="faq",
+                category=_normalized_text(category) or "未解决案例",
+                original_filename=f"unresolved-case-{case.id}.md",
+                stream=BytesIO(markdown.encode("utf-8")),
+            )
+            revision = max(
+                document.revisions,
+                key=lambda item: item.version_no,
+            )
+            revision = service.parse_revision(
+                tenant_id=tenant_id,
+                revision_id=revision.id,
+            )
+            revision = service.update_validity(
+                tenant_id=tenant_id,
+                revision_id=revision.id,
+                effective_at=effective_at,
+                expires_at=expires_at,
+            )
+        except (KnowledgeDocumentValidationError, KnowledgeProcessingError) as error:
+            raise UnresolvedCaseValidationError(str(error)) from error
+
+        case.knowledge_document_id = document.id
+        case.knowledge_revision_id = revision.id
+        case.should_add_to_kb = True
+        case.reviewed_by = created_by
+        case.reviewed_at = _utc_now()
+        case.updated_at = case.reviewed_at
+        self.db.commit()
+        return (
+            self.get_for_tenant(tenant_id=tenant_id, case_id=case_id),
+            document.id,
+            revision.id,
+        )
+
     def _query(self):
         reviewer = aliased(User)
         return (
@@ -216,3 +291,10 @@ def _normalized_text(value: object) -> str | None:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _draft_title(question: str) -> str:
+    normalized = " ".join(str(question).split())
+    if len(normalized) > 80:
+        normalized = f"{normalized[:77]}…"
+    return f"FAQ：{normalized}"

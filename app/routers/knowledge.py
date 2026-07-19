@@ -15,6 +15,7 @@ from app.schemas.knowledge import (
     KnowledgeDocumentListResponse,
     KnowledgeDocumentResponse,
     KnowledgeRejectRequest,
+    KnowledgeValidityUpdateRequest,
     KnowledgeRevisionData,
     KnowledgeRevisionResponse,
     KnowledgeIndexBuildData,
@@ -33,6 +34,7 @@ from app.services.knowledge_document_service import (
     KnowledgeDocumentStateError,
     KnowledgeDocumentValidationError,
     latest_revision,
+    revision_lifecycle_status,
 )
 from app.services.knowledge_processing_service import KnowledgeProcessingError
 from app.services.knowledge_index_service import (
@@ -405,6 +407,30 @@ def approve_knowledge_revision(
     return KnowledgeRevisionResponse(data=_revision_data(revision))
 
 
+@router.patch(
+    "/revisions/{revision_id}/validity",
+    response_model=KnowledgeRevisionResponse,
+)
+def update_knowledge_revision_validity(
+    revision_id: int,
+    request: KnowledgeValidityUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeRevisionResponse:
+    try:
+        revision = KnowledgeDocumentService(db).update_validity(
+            tenant_id=admin.tenant_id,
+            revision_id=revision_id,
+            effective_at=request.effective_at,
+            expires_at=request.expires_at,
+        )
+    except KnowledgeDocumentNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except KnowledgeDocumentValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return KnowledgeRevisionResponse(data=_revision_data(revision))
+
+
 @router.post(
     "/revisions/{revision_id}/reject",
     response_model=KnowledgeRevisionResponse,
@@ -482,6 +508,9 @@ def _revision_data(revision: KnowledgeRevision) -> KnowledgeRevisionData:
         reviewed_by=revision.reviewed_by,
         reviewed_at=revision.reviewed_at,
         review_reason=revision.review_reason,
+        effective_at=revision.effective_at,
+        expires_at=revision.expires_at,
+        lifecycle_status=revision_lifecycle_status(revision),
         created_at=revision.created_at,
         updated_at=revision.updated_at,
     )

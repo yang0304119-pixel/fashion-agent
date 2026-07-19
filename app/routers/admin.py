@@ -35,6 +35,9 @@ from app.schemas.admin import (
     AdminUnresolvedCaseStats,
     AdminUnresolvedCaseStatsResponse,
     UnresolvedCaseUpdateRequest,
+    KnowledgeDraftCreateData,
+    KnowledgeDraftCreateRequest,
+    KnowledgeDraftCreateResponse,
 )
 from app.schemas.refund import (
     RefundDecisionRequest,
@@ -80,6 +83,10 @@ def get_tenant_dashboard(
             pending_tickets=summary.pending_tickets,
             unresolved_cases=summary.unresolved_cases,
             today_sessions=summary.today_sessions,
+            pending_knowledge_reviews=summary.pending_knowledge_reviews,
+            ready_knowledge_builds=summary.ready_knowledge_builds,
+            expiring_soon_knowledge=summary.expiring_soon_knowledge,
+            expired_knowledge=summary.expired_knowledge,
         )
     )
 
@@ -493,6 +500,40 @@ def update_tenant_unresolved_case(
     return AdminUnresolvedCaseResponse(data=_to_admin_unresolved_case(item))
 
 
+@router.post(
+    "/unresolved-cases/{case_id}/knowledge-draft",
+    response_model=KnowledgeDraftCreateResponse,
+    status_code=201,
+)
+def create_knowledge_draft_from_case(
+    case_id: int,
+    request: KnowledgeDraftCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeDraftCreateResponse:
+    try:
+        item, document_id, revision_id = UnresolvedCaseService(db).create_faq_draft(
+            tenant_id=admin.tenant_id,
+            case_id=case_id,
+            created_by=admin.id,
+            title=request.title,
+            category=request.category,
+            effective_at=request.effective_at,
+            expires_at=request.expires_at,
+        )
+    except UnresolvedCaseNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except UnresolvedCaseValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return KnowledgeDraftCreateResponse(
+        data=KnowledgeDraftCreateData(
+            case=_to_admin_unresolved_case(item),
+            document_id=document_id,
+            revision_id=revision_id,
+        )
+    )
+
+
 def _to_admin_ticket(item) -> AdminTicketListItem:
     ticket = item.ticket
     return AdminTicketListItem(
@@ -533,6 +574,10 @@ def _to_admin_unresolved_case(item) -> AdminUnresolvedCaseListItem:
         human_label_intent=case.human_label_intent,
         human_label_answer=case.human_label_answer,
         should_add_to_kb=bool(case.should_add_to_kb),
+        knowledge_document_id=case.knowledge_document_id,
+        knowledge_revision_id=case.knowledge_revision_id,
+        resolved_by_build_id=case.resolved_by_build_id,
+        auto_resolved_at=case.auto_resolved_at,
         reviewed_by=case.reviewed_by,
         reviewer_username=item.reviewer_username,
         reviewed_at=case.reviewed_at,

@@ -1,4 +1,5 @@
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -75,7 +76,7 @@ class KnowledgeIndexLifecycleTests(ApiTestCase):
         ]
         for vector_patch in self.vector_patches:
             vector_patch.start()
-        vector_store._get_active_vector_store.cache_clear()
+        vector_store.reset_vector_store_clients()
 
     def tearDown(self):
         vector_store.reset_vector_store_clients()
@@ -347,6 +348,121 @@ class KnowledgeIndexLifecycleTests(ApiTestCase):
             )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["build"]["id"], active["id"])
+
+    def test_expired_or_scheduled_revisions_are_excluded_from_candidate(self):
+        expired = self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="已过期规则",
+            content="# 已过期规则\n\n不应进入候选知识库。",
+        )
+        active = self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="当前有效规则",
+            content="# 当前有效规则\n\n应该进入候选知识库。",
+        )
+        now = datetime.now(UTC)
+        expired_revision = expired["revisions"][0]
+        response = self.client.patch(
+            f"/api/admin/knowledge/revisions/{expired_revision['id']}/validity",
+            headers=self.admin_a_headers,
+            json={
+                "effective_at": (now - timedelta(days=10)).isoformat(),
+                "expires_at": (now - timedelta(days=1)).isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        candidate = self._create_candidate(self.admin_a_headers)
+        self.assertEqual(candidate["document_count"], 1)
+        self.assertEqual(
+            candidate["revision_snapshot"],
+            [active["revisions"][0]["id"]],
+        )
+
+    def test_retrieval_filters_revision_that_expires_after_build(self):
+        document = self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="短期有效规则",
+            content="# 短期有效规则\n\n此内容会在构建后过期。",
+        )
+        revision_id = document["revisions"][0]["id"]
+        now = datetime.now(UTC)
+        response = self.client.patch(
+            f"/api/admin/knowledge/revisions/{revision_id}/validity",
+            headers=self.admin_a_headers,
+            json={
+                "effective_at": (now - timedelta(days=1)).isoformat(),
+                "expires_at": (now + timedelta(days=1)).isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        build = self._create_candidate(self.admin_a_headers)
+        self._activate(self.admin_a_headers, build["id"])
+        self.assertTrue(retrieve("短期有效规则", tenant_id=1))
+
+        expired_at = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+        response = self.client.patch(
+            f"/api/admin/knowledge/revisions/{revision_id}/validity",
+            headers=self.admin_a_headers,
+            json={
+                "effective_at": (now - timedelta(days=1)).isoformat(),
+                "expires_at": expired_at,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(retrieve("短期有效规则", tenant_id=1), [])
+
+    def test_faq_draft_activation_auto_closes_linked_case(self):
+        db = self.Session()
+        try:
+            from app.models import UnresolvedCase
+            db.add(UnresolvedCase(
+                id=9001,
+                tenant_id=1,
+                user_id=1,
+                user_message="羽绒服可以机洗吗？",
+                predicted_intent="fallback",
+                confidence=0.2,
+                final_answer="暂时无法回答",
+                human_label_intent="knowledge_query",
+                human_label_answer="请使用中性洗涤剂低温轻柔清洗。",
+                should_add_to_kb=True,
+                is_resolved=False,
+                reviewed_by=3,
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        draft = self.client.post(
+            "/api/admin/unresolved-cases/9001/knowledge-draft",
+            headers=self.admin_a_headers,
+            json={"title": "羽绒服清洗 FAQ", "category": "洗护"},
+        )
+        self.assertEqual(draft.status_code, 201, draft.text)
+        revision_id = draft.json()["data"]["revision_id"]
+        case = draft.json()["data"]["case"]
+        self.assertEqual(case["knowledge_revision_id"], revision_id)
+        self.assertFalse(case["is_resolved"])
+
+        approved = self.client.post(
+            f"/api/admin/knowledge/revisions/{revision_id}/approve",
+            headers=self.admin_a_headers,
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+        candidate = self._create_candidate(self.admin_a_headers)
+        self.assertIn(revision_id, candidate["revision_snapshot"])
+        self._activate(self.admin_a_headers, candidate["id"])
+
+        closed = self.client.get(
+            "/api/admin/unresolved-cases/9001",
+            headers=self.admin_a_headers,
+        )
+        self.assertEqual(closed.status_code, 200, closed.text)
+        closed_case = closed.json()["data"]
+        self.assertTrue(closed_case["is_resolved"])
+        self.assertFalse(closed_case["should_add_to_kb"])
+        self.assertEqual(closed_case["resolved_by_build_id"], candidate["id"])
+        self.assertIsNotNone(closed_case["auto_resolved_at"])
 
     def _test_question(self, build_id: int) -> dict:
         response = self.client.post(

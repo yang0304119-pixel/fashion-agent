@@ -12,6 +12,10 @@ class AdminDashboardData(BaseModel):
     pending_tickets: int
     unresolved_cases: int
     today_sessions: int
+    pending_knowledge_reviews: int
+    ready_knowledge_builds: int
+    expiring_soon_knowledge: int
+    expired_knowledge: int
 
 
 class AdminDashboardResponse(BaseModel):
@@ -191,6 +195,10 @@ class AdminUnresolvedCaseListItem(BaseModel):
     human_label_intent: str | None
     human_label_answer: str | None
     should_add_to_kb: bool
+    knowledge_document_id: int | None
+    knowledge_revision_id: int | None
+    resolved_by_build_id: int | None
+    auto_resolved_at: datetime | None
     reviewed_by: int | None
     reviewer_username: str | None
     reviewed_at: datetime | None
@@ -236,3 +244,30 @@ class UnresolvedCaseUpdateRequest(BaseModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+
+class KnowledgeDraftCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=200)
+    category: str = Field(default="未解决案例", min_length=1, max_length=100)
+    effective_at: datetime | None = None
+    expires_at: datetime | None = None
+
+    @field_validator("title", "category")
+    @classmethod
+    def normalize_draft_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+class KnowledgeDraftCreateData(BaseModel):
+    case: AdminUnresolvedCaseListItem
+    document_id: int
+    revision_id: int
+
+
+class KnowledgeDraftCreateResponse(BaseModel):
+    success: bool = True
+    data: KnowledgeDraftCreateData

@@ -101,6 +101,8 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn('data-admin-panel="dashboard"', html)
         self.assertIn("orders_total", script)
         self.assertIn("today_sessions", script)
+        self.assertIn("pending_knowledge_reviews", script)
+        self.assertIn("expiring_soon_knowledge", script)
         self.assertIn("/api/admin/dashboard", script)
         self.assertIn("view: 'dashboard'", script)
 
@@ -174,6 +176,8 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn('id="knowledgeTestForm"', html)
         self.assertIn('id="knowledgeTestBuild"', html)
         self.assertIn('id="knowledgeTestResult"', html)
+        self.assertIn('id="knowledgeEffectiveAt"', html)
+        self.assertIn('id="knowledgeExpiresAt"', html)
         self.assertIn('id="approveKnowledgeBtn"', html)
         self.assertIn('id="rejectKnowledgeBtn"', html)
         self.assertIn("/api/admin/knowledge/documents", script)
@@ -188,6 +192,8 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn("dense_score", script)
         self.assertIn("bm25_score", script)
         self.assertIn("fusion_score", script)
+        self.assertIn("/validity", script)
+        self.assertIn("/knowledge-draft", script)
         self.assertIn("当前线上版本未受影响", script)
         self.assertNotIn("tenant_id", html)
 

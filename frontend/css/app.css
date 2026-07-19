@@ -313,6 +313,14 @@ button, select { cursor: pointer; }
 .knowledge-editor-label textarea { width: 100%; min-height: 310px; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: 13px/1.7 Consolas, "Microsoft YaHei", monospace; outline: none; resize: vertical; }
 .knowledge-editor-label textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(33,79,61,.12); }
 .knowledge-editor-label textarea:disabled { background: #f4f6f4; color: var(--muted); }
+.knowledge-validity-panel { padding: 15px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
+.knowledge-validity-panel > p { margin: 6px 0 13px; color: var(--muted); font-size: 12px; }
+.knowledge-validity-panel > div { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+.knowledge-validity-panel label, .case-knowledge-draft-panel label { display: grid; gap: 6px; color: #38423d; font-size: 12px; font-weight: 750; }
+.knowledge-validity-panel input, .case-knowledge-draft-panel input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.case-knowledge-draft-panel { display: grid; gap: 10px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
+.case-knowledge-draft-panel > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.case-draft-validity { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .knowledge-review-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .knowledge-reject-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .knowledge-revision-upload { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; padding-top: 17px; border-top: 1px solid var(--line); }
@@ -379,4 +387,5 @@ button, select { cursor: pointer; }
   .detail-grid .detail-row.full, .detail-grid .detail-actions { grid-column: 1; }
   .knowledge-summary-grid { grid-template-columns: 1fr; }
   .knowledge-reject-row, .knowledge-revision-upload { grid-template-columns: 1fr; }
+  .knowledge-validity-panel > div, .case-draft-validity { grid-template-columns: 1fr; }
 }

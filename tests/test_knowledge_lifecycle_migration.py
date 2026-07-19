@@ -16,6 +16,10 @@ class KnowledgeLifecycleMigrationTests(unittest.TestCase):
                     """
                     CREATE TABLE tenant (id INTEGER PRIMARY KEY);
                     CREATE TABLE "user" (id INTEGER PRIMARY KEY);
+                    CREATE TABLE unresolved_case (
+                        id INTEGER PRIMARY KEY,
+                        created_at DATETIME
+                    );
                     """
                 )
                 connection.commit()
@@ -36,6 +40,8 @@ class KnowledgeLifecycleMigrationTests(unittest.TestCase):
                 }
                 self.assertIn("quality_report", revision_columns)
                 self.assertIn("review_status", revision_columns)
+                self.assertIn("effective_at", revision_columns)
+                self.assertIn("expires_at", revision_columns)
                 index_names = {
                     row[1]
                     for row in connection.execute(
@@ -54,6 +60,14 @@ class KnowledgeLifecycleMigrationTests(unittest.TestCase):
                 }
                 self.assertIn("revision_snapshot", build_columns)
                 self.assertIn("previous_active_build_id", build_columns)
+                case_columns = {
+                    row[1]
+                    for row in connection.execute(
+                        "PRAGMA table_info(unresolved_case)"
+                    )
+                }
+                self.assertIn("knowledge_revision_id", case_columns)
+                self.assertIn("resolved_by_build_id", case_columns)
             finally:
                 connection.close()
 

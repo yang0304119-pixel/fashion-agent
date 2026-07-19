@@ -12,6 +12,12 @@ from app.models.product import Product
 from app.models.refund_request import RefundRequest
 from app.models.ticket import Ticket
 from app.models.unresolved_case import UnresolvedCase
+from app.models.knowledge_document import (
+    KnowledgeDocument,
+    KnowledgeIndexBuild,
+    KnowledgeRevision,
+)
+from app.services.knowledge_validity import EXPIRING_SOON_DAYS
 from app.models.user import User
 from app.services.order_query_service import ORDER_STATUSES
 from app.services.query_page import QueryPage, validate_pagination
@@ -34,6 +40,10 @@ class AdminDashboardSummary:
     pending_tickets: int
     unresolved_cases: int
     today_sessions: int
+    pending_knowledge_reviews: int
+    ready_knowledge_builds: int
+    expiring_soon_knowledge: int
+    expired_knowledge: int
 
 
 @dataclass(frozen=True)
@@ -76,6 +86,18 @@ class AdminQueryService:
         now: datetime | None = None,
     ) -> AdminDashboardSummary:
         day_start, day_end = _shanghai_day_utc_bounds(now)
+        current = (now or datetime.now(UTC)).replace(tzinfo=None)
+        expiring_limit = current + timedelta(days=EXPIRING_SOON_DAYS)
+        latest_revision = (
+            self.db.query(
+                KnowledgeRevision.document_id.label("document_id"),
+                func.max(KnowledgeRevision.version_no).label("version_no"),
+            )
+            .join(KnowledgeDocument)
+            .filter(KnowledgeDocument.tenant_id == tenant_id)
+            .group_by(KnowledgeRevision.document_id)
+            .subquery()
+        )
         return AdminDashboardSummary(
             orders_total=self._count(Order, tenant_id=tenant_id),
             pending_refunds=self._count(
@@ -108,6 +130,59 @@ class AdminQueryService:
                     AgentTrace.tenant_id == tenant_id,
                     AgentTrace.created_at >= day_start,
                     AgentTrace.created_at < day_end,
+                )
+                .scalar()
+                or 0
+            ),
+            pending_knowledge_reviews=(
+                self.db.query(func.count(KnowledgeRevision.id))
+                .join(
+                    latest_revision,
+                    (KnowledgeRevision.document_id == latest_revision.c.document_id)
+                    & (KnowledgeRevision.version_no == latest_revision.c.version_no),
+                )
+                .filter(
+                    KnowledgeRevision.parse_status == "succeeded",
+                    KnowledgeRevision.review_status == "pending",
+                )
+                .scalar()
+                or 0
+            ),
+            ready_knowledge_builds=(
+                self.db.query(func.count(KnowledgeIndexBuild.id))
+                .filter(
+                    KnowledgeIndexBuild.tenant_id == tenant_id,
+                    KnowledgeIndexBuild.status == "ready",
+                )
+                .scalar()
+                or 0
+            ),
+            expiring_soon_knowledge=(
+                self.db.query(func.count(KnowledgeRevision.id))
+                .join(
+                    latest_revision,
+                    (KnowledgeRevision.document_id == latest_revision.c.document_id)
+                    & (KnowledgeRevision.version_no == latest_revision.c.version_no),
+                )
+                .filter(
+                    KnowledgeRevision.review_status == "approved",
+                    KnowledgeRevision.expires_at > current,
+                    KnowledgeRevision.expires_at <= expiring_limit,
+                )
+                .scalar()
+                or 0
+            ),
+            expired_knowledge=(
+                self.db.query(func.count(KnowledgeRevision.id))
+                .join(
+                    latest_revision,
+                    (KnowledgeRevision.document_id == latest_revision.c.document_id)
+                    & (KnowledgeRevision.version_no == latest_revision.c.version_no),
+                )
+                .filter(
+                    KnowledgeRevision.review_status == "approved",
+                    KnowledgeRevision.expires_at.is_not(None),
+                    KnowledgeRevision.expires_at <= current,
                 )
                 .scalar()
                 or 0

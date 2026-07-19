@@ -107,6 +107,7 @@ function bindEvents() {
     });
   });
   document.getElementById('caseAnnotationForm').addEventListener('submit', saveCaseAnnotation);
+  document.getElementById('createCaseKnowledgeDraftBtn').addEventListener('click', createCaseKnowledgeDraft);
   document.getElementById('cancelCaseAnnotationBtn').addEventListener('click', () => {
     document.getElementById('caseDetailDialog').close();
   });
@@ -140,6 +141,7 @@ function bindEvents() {
   document.getElementById('knowledgeRevisionUploadForm').addEventListener('submit', uploadKnowledgeRevision);
   document.getElementById('createKnowledgeBuildBtn').addEventListener('click', createKnowledgeBuild);
   document.getElementById('rollbackKnowledgeBuildBtn').addEventListener('click', rollbackKnowledgeBuild);
+  document.getElementById('saveKnowledgeValidityBtn').addEventListener('click', saveKnowledgeValidity);
   document.getElementById('knowledgeTestForm').addEventListener('submit', runKnowledgeTest);
   document.querySelectorAll('.metric-tab').forEach((tab) => {
     tab.addEventListener('click', () => selectStatus(tab.dataset.status));
@@ -515,7 +517,7 @@ function knowledgeHitCard(hit) {
   });
   const meta = document.createElement('p');
   meta.className = 'knowledge-hit-meta';
-  meta.textContent = `${knowledgeTypeLabel(hit.knowledge_type)} · ${hit.category || '未分类'} · ${hit.relative_source || '安全来源标识不可用'} · Chunk ${hit.chunk_id}`;
+  meta.textContent = `${knowledgeTypeLabel(hit.knowledge_type)} · ${hit.category || '未分类'} · 生效 ${formatDate(hit.effective_at)} · 过期 ${formatDate(hit.expires_at)} · ${hit.relative_source || '安全来源标识不可用'} · Chunk ${hit.chunk_id}`;
   const preview = document.createElement('pre');
   preview.className = 'knowledge-hit-preview';
   preview.textContent = hit.preview;
@@ -611,7 +613,7 @@ function renderKnowledgeDocuments(container, documents) {
   const table = element('table', 'data-table');
   const head = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['文档', '知识类型', '当前版本', '解析状态', '审核状态', '质量', '更新时间', '操作'].forEach((label) => {
+  ['文档', '知识类型', '当前版本', '解析状态', '审核状态', '有效期', '质量', '更新时间', '操作'].forEach((label) => {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.appendChild(th);
@@ -629,6 +631,7 @@ function renderKnowledgeDocuments(container, documents) {
       itemCell(`v${revision.version_no}`, revision.original_filename),
       knowledgeStatusCell(revision.parse_status, 'parse'),
       knowledgeStatusCell(revision.review_status, 'review'),
+      knowledgeLifecycleStatusCell(revision.lifecycle_status),
       textCell(knowledgeQualityLabel(revision.quality_status)),
       textCell(formatDate(documentItem.updated_at)),
       actions,
@@ -742,6 +745,9 @@ async function renderKnowledgeDetail(documentItem) {
     ['创建时间', formatDate(documentItem.created_at)],
     ['解析状态', knowledgeParseLabel(revision.parse_status)],
     ['审核状态', knowledgeReviewLabel(revision.review_status)],
+    ['有效期状态', knowledgeLifecycleLabel(revision.lifecycle_status)],
+    ['生效时间', formatDate(revision.effective_at)],
+    ['过期时间', formatDate(revision.expires_at)],
     ['内容哈希', revision.processed_sha256 ? revision.processed_sha256.slice(0, 16) : '尚未生成'],
     ['审核记录', revision.reviewed_at ? `${revision.reviewed_by || '管理员'} · ${formatDate(revision.reviewed_at)}` : '尚未审核'],
   ].forEach(([label, value]) => {
@@ -763,6 +769,9 @@ async function renderKnowledgeDetail(documentItem) {
   document.getElementById('approveKnowledgeBtn').disabled = !canReview;
   document.getElementById('rejectKnowledgeBtn').disabled = !canReview;
   document.getElementById('knowledgeContentEditor').disabled = !canReview;
+  document.getElementById('knowledgeEffectiveAt').value = dateTimeLocalValue(revision.effective_at);
+  document.getElementById('knowledgeExpiresAt').value = dateTimeLocalValue(revision.expires_at);
+  document.getElementById('saveKnowledgeValidityBtn').disabled = revision.parse_status !== 'succeeded';
 
   if (canReview) {
     try {
@@ -773,6 +782,30 @@ async function renderKnowledgeDetail(documentItem) {
     }
   } else if (revision.parse_error_message) {
     document.getElementById('knowledgeDetailError').textContent = revision.parse_error_message;
+  }
+}
+
+
+async function saveKnowledgeValidity() {
+  if (!state.selectedKnowledgeRevisionId) return;
+  const button = document.getElementById('saveKnowledgeValidityBtn');
+  const errorElement = document.getElementById('knowledgeDetailError');
+  button.disabled = true;
+  try {
+    await requestJson(`/api/admin/knowledge/revisions/${state.selectedKnowledgeRevisionId}/validity`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        effective_at: localDateTimePayload('knowledgeEffectiveAt'),
+        expires_at: localDateTimePayload('knowledgeExpiresAt'),
+      }),
+    });
+    showToast('知识有效期已保存。');
+    await openKnowledgeDetail(state.selectedKnowledgeDocumentId);
+    await loadKnowledgeDocuments();
+  } catch (error) {
+    errorElement.textContent = error.message || '知识有效期保存失败。';
+    button.disabled = false;
   }
 }
 
@@ -928,6 +961,10 @@ async function loadDashboard() {
     pending_tickets: 'dashboardPendingTickets',
     unresolved_cases: 'dashboardUnresolvedCases',
     today_sessions: 'dashboardTodaySessions',
+    pending_knowledge_reviews: 'dashboardPendingKnowledgeReviews',
+    ready_knowledge_builds: 'dashboardReadyKnowledgeBuilds',
+    expiring_soon_knowledge: 'dashboardExpiringKnowledge',
+    expired_knowledge: 'dashboardExpiredKnowledge',
   };
   Object.values(metricIds).forEach((id) => {
     document.getElementById(id).textContent = '…';
@@ -1177,12 +1214,59 @@ function renderCaseAnnotation(caseItem) {
     caseReadonlyItem('系统预测', `${intentLabel(caseItem.predicted_intent)} · ${formatConfidence(caseItem.confidence)}`),
     caseReadonlyItem('系统最终回答', caseItem.final_answer || '—'),
     caseReadonlyItem('审核记录', caseItem.reviewer_username ? `${caseItem.reviewer_username} · ${formatDate(caseItem.reviewed_at)}` : '尚未人工标注'),
+    caseReadonlyItem('关联知识草稿', caseItem.knowledge_revision_id ? `Document #${caseItem.knowledge_document_id} · Revision #${caseItem.knowledge_revision_id}` : '尚未生成'),
+    caseReadonlyItem('闭环状态', caseItem.resolved_by_build_id ? `已由 Build #${caseItem.resolved_by_build_id} 上线后自动关闭` : '等待知识上线'),
   );
   document.getElementById('caseReadonlyDetail').replaceChildren(readonly);
   document.getElementById('caseHumanIntent').value = caseItem.human_label_intent || '';
   document.getElementById('caseHumanAnswer').value = caseItem.human_label_answer || '';
   document.getElementById('caseShouldAddToKb').checked = Boolean(caseItem.should_add_to_kb);
   document.getElementById('caseIsResolved').checked = Boolean(caseItem.is_resolved);
+  document.getElementById('caseDraftTitle').value = '';
+  document.getElementById('caseDraftEffectiveAt').value = '';
+  document.getElementById('caseDraftExpiresAt').value = '';
+  document.getElementById('createCaseKnowledgeDraftBtn').disabled = Boolean(caseItem.knowledge_revision_id);
+}
+
+
+async function createCaseKnowledgeDraft() {
+  if (!state.selectedCaseId) return;
+  const answer = document.getElementById('caseHumanAnswer').value.trim();
+  const errorElement = document.getElementById('caseFormError');
+  if (!answer) {
+    errorElement.textContent = '生成 FAQ 草稿前必须先保存人工正确答案。';
+    return;
+  }
+  const button = document.getElementById('createCaseKnowledgeDraftBtn');
+  button.disabled = true;
+  try {
+    await requestJson(`/api/admin/unresolved-cases/${state.selectedCaseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        human_label_intent: document.getElementById('caseHumanIntent').value || 'knowledge_query',
+        human_label_answer: answer,
+        should_add_to_kb: true,
+        is_resolved: false,
+      }),
+    });
+    const payload = await requestJson(`/api/admin/unresolved-cases/${state.selectedCaseId}/knowledge-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: document.getElementById('caseDraftTitle').value.trim() || null,
+        category: '未解决案例',
+        effective_at: localDateTimePayload('caseDraftEffectiveAt'),
+        expires_at: localDateTimePayload('caseDraftExpiresAt'),
+      }),
+    });
+    showToast(`已生成 FAQ 草稿 Document #${payload.data.document_id}，请前往知识文档审核。`);
+    renderCaseAnnotation(payload.data.case);
+    await Promise.all([loadCaseStats(), loadCases()]);
+  } catch (error) {
+    errorElement.textContent = error.message || 'FAQ 草稿生成失败。';
+    button.disabled = false;
+  }
 }
 
 
@@ -2020,6 +2104,19 @@ function knowledgeBuildStatusCell(status) {
 }
 
 
+function knowledgeLifecycleStatusCell(status) {
+  const visualStatus = {
+    active: 'succeeded',
+    scheduled: 'processing',
+    expiring_soon: 'approved',
+    expired: 'failed',
+  }[status] || status;
+  const badge = element('span', `status ${visualStatus}`);
+  badge.textContent = knowledgeLifecycleLabel(status);
+  return badge;
+}
+
+
 function actionButton(label, style, handler) {
   const button = element('button', `button ${style} small`);
   button.type = 'button';
@@ -2177,6 +2274,16 @@ function knowledgeBuildStatusLabel(status) {
 }
 
 
+function knowledgeLifecycleLabel(status) {
+  return {
+    active: '有效',
+    scheduled: '待生效',
+    expiring_soon: '即将过期',
+    expired: '已过期',
+  }[status] || status || '有效';
+}
+
+
 function knowledgeWarningLabel(warning) {
   return {
     extracted_text_too_short: '解析文本较短，请确认内容是否完整',
@@ -2234,6 +2341,23 @@ function formatDate(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+
+
+function dateTimeLocalValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+
+function localDateTimePayload(inputId) {
+  const value = document.getElementById(inputId).value;
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 

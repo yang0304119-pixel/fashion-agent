@@ -23,6 +23,9 @@ class KnowledgeRevisionData(BaseModel):
     reviewed_by: int | None
     reviewed_at: datetime | None
     review_reason: str | None
+    effective_at: datetime | None
+    expires_at: datetime | None
+    lifecycle_status: str
     created_at: datetime | None
     updated_at: datetime | None
 
@@ -96,6 +99,13 @@ class KnowledgeRejectRequest(BaseModel):
         return normalized
 
 
+class KnowledgeValidityUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    effective_at: datetime | None = None
+    expires_at: datetime | None = None
+
+
 class KnowledgeIndexBuildData(BaseModel):
     id: int
     status: str
@@ -165,6 +175,8 @@ class KnowledgeRetrievalHitData(BaseModel):
     bm25_rank: int
     fusion_score: float
     fusion_rank: int
+    effective_at: datetime | None
+    expires_at: datetime | None
 
 
 class KnowledgeQuestionTestData(BaseModel):
