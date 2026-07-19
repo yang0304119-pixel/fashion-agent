@@ -23,6 +23,9 @@ const state = {
   selectedTraceId: null,
   casesPage: 1,
   selectedCaseId: null,
+  knowledgePage: 1,
+  selectedKnowledgeDocumentId: null,
+  selectedKnowledgeRevisionId: null,
   selectedRefund: null,
 };
 
@@ -105,6 +108,34 @@ function bindEvents() {
   document.getElementById('cancelCaseAnnotationBtn').addEventListener('click', () => {
     document.getElementById('caseDetailDialog').close();
   });
+  document.getElementById('knowledgeSearchForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    state.knowledgePage = 1;
+    loadKnowledgeDocuments();
+  });
+  ['knowledgeTypeFilter', 'knowledgeParseFilter', 'knowledgeReviewFilter'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', () => {
+      state.knowledgePage = 1;
+      loadKnowledgeDocuments();
+    });
+  });
+  document.getElementById('clearKnowledgeFiltersBtn').addEventListener('click', () => {
+    ['knowledgeSearchInput', 'knowledgeTypeFilter', 'knowledgeParseFilter', 'knowledgeReviewFilter'].forEach((id) => {
+      document.getElementById(id).value = '';
+    });
+    state.knowledgePage = 1;
+    loadKnowledgeDocuments();
+  });
+  document.getElementById('openKnowledgeUploadBtn').addEventListener('click', openKnowledgeUpload);
+  document.getElementById('knowledgeUploadForm').addEventListener('submit', uploadKnowledgeDocument);
+  document.getElementById('cancelKnowledgeUploadBtn').addEventListener('click', () => {
+    document.getElementById('knowledgeUploadDialog').close();
+  });
+  document.getElementById('parseKnowledgeBtn').addEventListener('click', parseSelectedKnowledgeRevision);
+  document.getElementById('saveKnowledgeContentBtn').addEventListener('click', saveSelectedKnowledgeContent);
+  document.getElementById('approveKnowledgeBtn').addEventListener('click', approveSelectedKnowledgeRevision);
+  document.getElementById('rejectKnowledgeBtn').addEventListener('click', rejectSelectedKnowledgeRevision);
+  document.getElementById('knowledgeRevisionUploadForm').addEventListener('submit', uploadKnowledgeRevision);
   document.querySelectorAll('.metric-tab').forEach((tab) => {
     tab.addEventListener('click', () => selectStatus(tab.dataset.status));
   });
@@ -128,12 +159,14 @@ function bindEvents() {
   bindBackdropClose('approveDialog');
   bindBackdropClose('rejectDialog');
   bindBackdropClose('caseDetailDialog');
+  bindBackdropClose('knowledgeUploadDialog');
+  bindBackdropClose('knowledgeDetailDialog');
 }
 
 
 async function openCurrentView() {
   const requestedView = window.location.hash.replace('#', '');
-  const availableViews = ['dashboard', 'orders', 'refunds', 'tickets', 'traces', 'cases'];
+  const availableViews = ['dashboard', 'knowledge', 'orders', 'refunds', 'tickets', 'traces', 'cases'];
   state.view = availableViews.includes(requestedView) ? requestedView : 'dashboard';
   document.querySelectorAll('[data-admin-view]').forEach((link) => {
     link.classList.toggle('active', link.dataset.adminView === state.view);
@@ -153,6 +186,12 @@ async function openCurrentView() {
     description.textContent = '查看当前租户的客服业务和待办事项。';
     refreshButton.textContent = '刷新总览';
     await loadDashboard();
+  } else if (state.view === 'knowledge') {
+    eyebrow.textContent = 'KNOWLEDGE LIFECYCLE';
+    title.textContent = '知识文档';
+    description.textContent = '上传、解析、修订和审核当前租户的商家知识。';
+    refreshButton.textContent = '刷新文档';
+    await loadKnowledgeDocuments();
   } else if (state.view === 'orders') {
     eyebrow.textContent = 'BUSINESS CONTEXT';
     title.textContent = '业务上下文';
@@ -209,6 +248,9 @@ async function refreshWorkspace() {
     if (state.view === 'dashboard') {
       await loadDashboard();
       showToast('运营总览已刷新。');
+    } else if (state.view === 'knowledge') {
+      await loadKnowledgeDocuments();
+      showToast('知识文档已刷新。');
     } else if (state.view === 'orders') {
       await loadOrders();
       showToast('订单数据已刷新。');
@@ -225,6 +267,352 @@ async function refreshWorkspace() {
       await Promise.all([loadStatusCounts(), loadRefunds()]);
       showToast('退款数据已刷新。');
     }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+
+async function loadKnowledgeDocuments() {
+  const container = document.getElementById('adminKnowledgeContent');
+  showLoadingState(container, '正在读取知识文档…');
+  const params = new URLSearchParams({
+    page: state.knowledgePage,
+    page_size: PAGE_SIZE,
+  });
+  const search = document.getElementById('knowledgeSearchInput').value.trim();
+  const knowledgeType = document.getElementById('knowledgeTypeFilter').value;
+  const parseStatus = document.getElementById('knowledgeParseFilter').value;
+  const reviewStatus = document.getElementById('knowledgeReviewFilter').value;
+  if (search) params.set('search', search);
+  if (knowledgeType) params.set('knowledge_type', knowledgeType);
+  if (parseStatus) params.set('parse_status', parseStatus);
+  if (reviewStatus) params.set('review_status', reviewStatus);
+
+  try {
+    const payload = await requestJson(`/api/admin/knowledge/documents?${params}`);
+    renderKnowledgeDocuments(container, payload.data);
+    renderKnowledgePagination(payload);
+  } catch (error) {
+    showErrorState(container, error.message);
+    document.getElementById('adminKnowledgePagination').replaceChildren();
+  }
+}
+
+
+function renderKnowledgeDocuments(container, documents) {
+  if (!documents.length) {
+    showEmptyState(container, '暂无知识文档', '上传商家资料后可进行解析和人工审核。');
+    return;
+  }
+  const card = element('div', 'data-card');
+  const wrapper = element('div', 'table-wrap');
+  const table = element('table', 'data-table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['文档', '知识类型', '当前版本', '解析状态', '审核状态', '质量', '更新时间', '操作'].forEach((label) => {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  head.appendChild(headRow);
+  const body = document.createElement('tbody');
+  documents.forEach((documentItem) => {
+    const revision = documentItem.latest_revision;
+    const row = document.createElement('tr');
+    const actions = element('div', 'knowledge-actions-cell');
+    actions.appendChild(actionButton('查看与审核', 'primary', () => openKnowledgeDetail(documentItem.id)));
+    const cells = [
+      itemCell(documentItem.title, documentItem.category),
+      textCell(knowledgeTypeLabel(documentItem.knowledge_type)),
+      itemCell(`v${revision.version_no}`, revision.original_filename),
+      knowledgeStatusCell(revision.parse_status, 'parse'),
+      knowledgeStatusCell(revision.review_status, 'review'),
+      textCell(knowledgeQualityLabel(revision.quality_status)),
+      textCell(formatDate(documentItem.updated_at)),
+      actions,
+    ];
+    cells.forEach((cell) => {
+      const td = document.createElement('td');
+      td.appendChild(cell);
+      row.appendChild(td);
+    });
+    body.appendChild(row);
+  });
+  table.append(head, body);
+  wrapper.appendChild(table);
+  card.appendChild(wrapper);
+  container.replaceChildren(card);
+}
+
+
+function renderKnowledgePagination(payload) {
+  const container = document.getElementById('adminKnowledgePagination');
+  container.replaceChildren();
+  const totalPages = Math.max(1, Math.ceil(payload.total / payload.page_size));
+  if (payload.total === 0 || totalPages === 1) return;
+  const summary = document.createElement('span');
+  summary.textContent = `共 ${payload.total} 份 · 第 ${payload.page}/${totalPages} 页`;
+  const previous = actionButton('上一页', 'secondary', () => changeKnowledgePage(payload.page - 1));
+  const next = actionButton('下一页', 'secondary', () => changeKnowledgePage(payload.page + 1));
+  previous.disabled = payload.page <= 1;
+  next.disabled = payload.page >= totalPages;
+  container.append(summary, previous, next);
+}
+
+
+function changeKnowledgePage(page) {
+  state.knowledgePage = page;
+  loadKnowledgeDocuments();
+}
+
+
+function openKnowledgeUpload() {
+  document.getElementById('knowledgeUploadForm').reset();
+  document.getElementById('knowledgeUploadCategory').value = '通用';
+  document.getElementById('knowledgeUploadType').value = 'after_sales_policy';
+  document.getElementById('knowledgeUploadError').textContent = '';
+  document.getElementById('knowledgeUploadDialog').showModal();
+}
+
+
+async function uploadKnowledgeDocument(event) {
+  event.preventDefault();
+  const file = document.getElementById('knowledgeUploadFile').files[0];
+  const errorElement = document.getElementById('knowledgeUploadError');
+  if (!file) {
+    errorElement.textContent = '请选择需要上传的商家资料。';
+    return;
+  }
+  const form = new FormData();
+  form.append('title', document.getElementById('knowledgeUploadTitle').value.trim());
+  form.append('knowledge_type', document.getElementById('knowledgeUploadType').value);
+  form.append('category', document.getElementById('knowledgeUploadCategory').value.trim() || '通用');
+  form.append('file', file, file.name);
+  const button = document.getElementById('submitKnowledgeUploadBtn');
+  button.disabled = true;
+  errorElement.textContent = '';
+  try {
+    const payload = await requestJson('/api/admin/knowledge/documents', {
+      method: 'POST',
+      body: form,
+    });
+    document.getElementById('knowledgeUploadDialog').close();
+    showToast(`知识文档“${payload.data.title}”已上传，等待解析。`);
+    await loadKnowledgeDocuments();
+    await openKnowledgeDetail(payload.data.id);
+  } catch (error) {
+    errorElement.textContent = error.message || '知识文档上传失败。';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+
+async function openKnowledgeDetail(documentId) {
+  state.selectedKnowledgeDocumentId = documentId;
+  const dialog = document.getElementById('knowledgeDetailDialog');
+  showLoadingState(document.getElementById('knowledgeDetailSummary'), '正在读取知识文档…');
+  document.getElementById('knowledgeQualityPanel').replaceChildren();
+  document.getElementById('knowledgeContentEditor').value = '';
+  document.getElementById('knowledgeContentEditor').disabled = true;
+  document.getElementById('knowledgeDetailError').textContent = '';
+  document.getElementById('knowledgeRejectReason').value = '';
+  if (!dialog.open) dialog.showModal();
+  try {
+    const payload = await requestJson(`/api/admin/knowledge/documents/${documentId}`);
+    await renderKnowledgeDetail(payload.data);
+  } catch (error) {
+    showErrorState(document.getElementById('knowledgeDetailSummary'), error.message);
+  }
+}
+
+
+async function renderKnowledgeDetail(documentItem) {
+  const revision = documentItem.latest_revision;
+  state.selectedKnowledgeDocumentId = documentItem.id;
+  state.selectedKnowledgeRevisionId = revision.id;
+  document.getElementById('knowledgeDetailTitle').textContent = documentItem.title;
+  const summary = element('div', 'knowledge-summary-grid');
+  [
+    ['知识类型', knowledgeTypeLabel(documentItem.knowledge_type)],
+    ['分类', documentItem.category],
+    ['当前版本', `v${revision.version_no} · ${revision.original_filename}`],
+    ['创建时间', formatDate(documentItem.created_at)],
+    ['解析状态', knowledgeParseLabel(revision.parse_status)],
+    ['审核状态', knowledgeReviewLabel(revision.review_status)],
+    ['内容哈希', revision.processed_sha256 ? revision.processed_sha256.slice(0, 16) : '尚未生成'],
+    ['审核记录', revision.reviewed_at ? `${revision.reviewed_by || '管理员'} · ${formatDate(revision.reviewed_at)}` : '尚未审核'],
+  ].forEach(([label, value]) => {
+    const item = element('div', 'knowledge-summary-item');
+    const labelNode = document.createElement('span');
+    labelNode.textContent = label;
+    const valueNode = document.createElement('strong');
+    valueNode.textContent = value;
+    item.append(labelNode, valueNode);
+    summary.appendChild(item);
+  });
+  document.getElementById('knowledgeDetailSummary').replaceChildren(summary);
+  renderKnowledgeQuality(revision);
+
+  const canReview = revision.parse_status === 'succeeded';
+  document.getElementById('parseKnowledgeBtn').disabled = revision.parse_status === 'running';
+  document.getElementById('parseKnowledgeBtn').textContent = revision.parse_status === 'failed' ? '重新解析' : '开始解析';
+  document.getElementById('saveKnowledgeContentBtn').disabled = !canReview;
+  document.getElementById('approveKnowledgeBtn').disabled = !canReview;
+  document.getElementById('rejectKnowledgeBtn').disabled = !canReview;
+  document.getElementById('knowledgeContentEditor').disabled = !canReview;
+
+  if (canReview) {
+    try {
+      const payload = await requestJson(`/api/admin/knowledge/revisions/${revision.id}/content`);
+      document.getElementById('knowledgeContentEditor').value = payload.data.content;
+    } catch (error) {
+      document.getElementById('knowledgeDetailError').textContent = error.message;
+    }
+  } else if (revision.parse_error_message) {
+    document.getElementById('knowledgeDetailError').textContent = revision.parse_error_message;
+  }
+}
+
+
+function renderKnowledgeQuality(revision) {
+  const panel = document.getElementById('knowledgeQualityPanel');
+  panel.replaceChildren();
+  if (!revision.quality_report) {
+    panel.textContent = revision.parse_status === 'failed'
+      ? `解析失败：${revision.parse_error_message || '请检查文件后重试。'}`
+      : '解析完成后将在这里展示字符数、标题数、表格数和质量警告。';
+    return;
+  }
+  const metrics = revision.quality_report.metrics || {};
+  const summary = document.createElement('div');
+  summary.innerHTML = `<strong>质量检测：</strong>${knowledgeQualityLabel(revision.quality_status)} · ${metrics.character_count || 0} 字符 · ${metrics.heading_count || 0} 个标题 · ${metrics.table_row_count || 0} 行表格`;
+  panel.appendChild(summary);
+  const warnings = revision.quality_report.warnings || [];
+  if (warnings.length) {
+    const list = element('ul', 'knowledge-warning-list');
+    warnings.forEach((warning) => {
+      const item = document.createElement('li');
+      item.textContent = knowledgeWarningLabel(warning);
+      list.appendChild(item);
+    });
+    panel.appendChild(list);
+  }
+  if (revision.review_reason) {
+    const reason = document.createElement('p');
+    reason.textContent = `审核意见：${revision.review_reason}`;
+    panel.appendChild(reason);
+  }
+}
+
+
+async function parseSelectedKnowledgeRevision() {
+  if (!state.selectedKnowledgeRevisionId) return;
+  await runKnowledgeAction(
+    'parseKnowledgeBtn',
+    `/api/admin/knowledge/revisions/${state.selectedKnowledgeRevisionId}/parse`,
+    { method: 'POST' },
+    '文档解析完成。',
+  );
+}
+
+
+async function saveSelectedKnowledgeContent() {
+  if (!state.selectedKnowledgeRevisionId) return;
+  const content = document.getElementById('knowledgeContentEditor').value;
+  if (!content.trim()) {
+    document.getElementById('knowledgeDetailError').textContent = '解析内容不能为空。';
+    return;
+  }
+  await runKnowledgeAction(
+    'saveKnowledgeContentBtn',
+    `/api/admin/knowledge/revisions/${state.selectedKnowledgeRevisionId}/content`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    },
+    '解析内容已保存，审核状态已重置为待审核。',
+  );
+}
+
+
+async function approveSelectedKnowledgeRevision() {
+  if (!state.selectedKnowledgeRevisionId) return;
+  await runKnowledgeAction(
+    'approveKnowledgeBtn',
+    `/api/admin/knowledge/revisions/${state.selectedKnowledgeRevisionId}/approve`,
+    { method: 'POST' },
+    '知识版本已审核通过；本阶段不会自动修改线上 Chroma。',
+  );
+}
+
+
+async function rejectSelectedKnowledgeRevision() {
+  if (!state.selectedKnowledgeRevisionId) return;
+  const reason = document.getElementById('knowledgeRejectReason').value.trim();
+  if (!reason) {
+    document.getElementById('knowledgeDetailError').textContent = '拒绝时必须填写审核原因。';
+    document.getElementById('knowledgeRejectReason').focus();
+    return;
+  }
+  await runKnowledgeAction(
+    'rejectKnowledgeBtn',
+    `/api/admin/knowledge/revisions/${state.selectedKnowledgeRevisionId}/reject`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+    '知识版本已拒绝。',
+  );
+}
+
+
+async function runKnowledgeAction(buttonId, url, options, successMessage) {
+  const button = document.getElementById(buttonId);
+  const errorElement = document.getElementById('knowledgeDetailError');
+  button.disabled = true;
+  errorElement.textContent = '';
+  try {
+    await requestJson(url, options);
+    showToast(successMessage);
+    await loadKnowledgeDocuments();
+    await openKnowledgeDetail(state.selectedKnowledgeDocumentId);
+  } catch (error) {
+    errorElement.textContent = error.message || '知识文档操作失败。';
+    showToast(errorElement.textContent, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+
+async function uploadKnowledgeRevision(event) {
+  event.preventDefault();
+  if (!state.selectedKnowledgeDocumentId) return;
+  const fileInput = document.getElementById('knowledgeRevisionFile');
+  const file = fileInput.files[0];
+  if (!file) {
+    document.getElementById('knowledgeDetailError').textContent = '请选择新版本文件。';
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const button = document.getElementById('submitKnowledgeRevisionBtn');
+  button.disabled = true;
+  try {
+    await requestJson(`/api/admin/knowledge/documents/${state.selectedKnowledgeDocumentId}/revisions`, {
+      method: 'POST',
+      body: form,
+    });
+    fileInput.value = '';
+    showToast('新知识版本已上传，等待解析。');
+    await loadKnowledgeDocuments();
+    await openKnowledgeDetail(state.selectedKnowledgeDocumentId);
+  } catch (error) {
+    document.getElementById('knowledgeDetailError').textContent = error.message || '新版本上传失败。';
   } finally {
     button.disabled = false;
   }
@@ -1303,6 +1691,20 @@ function caseStatusCell(isResolved) {
 }
 
 
+function knowledgeStatusCell(status, kind) {
+  const visualStatus = status === 'running'
+    ? 'processing'
+    : status === 'approved'
+      ? 'succeeded'
+      : status;
+  const badge = element('span', `status ${visualStatus}`);
+  badge.textContent = kind === 'parse'
+    ? knowledgeParseLabel(status)
+    : knowledgeReviewLabel(status);
+  return badge;
+}
+
+
 function actionButton(label, style, handler) {
   const button = element('button', `button ${style} small`);
   button.type = 'button';
@@ -1407,6 +1809,56 @@ function intentLabel(intent) {
     composite_query: '组合查询',
     fallback: 'Fallback',
   }[intent] || intent || '未识别';
+}
+
+
+function knowledgeTypeLabel(type) {
+  return {
+    product_knowledge: '商品知识',
+    size_guide: '尺码指南',
+    after_sales_policy: '售后政策',
+    logistics_policy: '物流规则',
+    store_rule: '店铺规则',
+    faq: 'FAQ',
+  }[type] || type || '未分类';
+}
+
+
+function knowledgeParseLabel(status) {
+  return {
+    pending: '待解析',
+    running: '解析中',
+    succeeded: '解析成功',
+    failed: '解析失败',
+  }[status] || status || '未知';
+}
+
+
+function knowledgeReviewLabel(status) {
+  return {
+    pending: '待审核',
+    approved: '已通过',
+    rejected: '已拒绝',
+  }[status] || status || '未知';
+}
+
+
+function knowledgeQualityLabel(status) {
+  return {
+    passed: '质量检查通过',
+    warning: '存在质量提醒',
+  }[status] || '尚未检查';
+}
+
+
+function knowledgeWarningLabel(warning) {
+  return {
+    extracted_text_too_short: '解析文本较短，请确认内容是否完整',
+    replacement_characters_detected: '检测到 Unicode 替换字符，可能存在乱码',
+    possible_mojibake_detected: '检测到可能的乱码模式',
+    very_long_lines_detected: '存在超长行，建议人工检查排版',
+    high_repeated_line_ratio: '重复行比例较高，可能包含页眉页脚噪声',
+  }[warning] || warning;
 }
 
 

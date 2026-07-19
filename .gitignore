@@ -36,8 +36,8 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
-# 本地模型
-models/
+# 本地模型（仅仓库根目录，避免误忽略 app/models）
+/models/
 
 # Python 缓存
 __pycache__/
@@ -46,3 +46,6 @@ __pycache__/
 
 # Chroma 向量数据库，按实际目录调整
 data/knowledge/chroma/
+
+# 运营台上传的租户知识原文件与解析内容
+/data/knowledge/tenants/

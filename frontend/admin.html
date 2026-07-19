@@ -22,6 +22,7 @@
       </a>
       <nav class="admin-nav" aria-label="AI 客服运营台导航">
         <a class="active" href="#dashboard" data-admin-view="dashboard"><span>⌂</span>总览</a>
+        <a href="#knowledge" data-admin-view="knowledge"><span>▣</span>知识文档</a>
         <a href="#orders" data-admin-view="orders"><span>▦</span>业务上下文</a>
         <a href="#refunds" data-admin-view="refunds"><span>↗</span>高风险操作审核</a>
         <a href="#tickets" data-admin-view="tickets"><span>▤</span>人工接管与工单</a>
@@ -84,6 +85,50 @@
           </div>
           <p>总览数字均限定在当前租户内，点击指标卡可进入对应工作区。</p>
         </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="knowledge">
+        <section class="ticket-toolbar knowledge-toolbar">
+          <form id="knowledgeSearchForm" class="knowledge-search-form">
+            <label class="filter-control">搜索
+              <input id="knowledgeSearchInput" maxlength="200" placeholder="文档标题或分类">
+            </label>
+            <label class="filter-control">知识类型
+              <select id="knowledgeTypeFilter">
+                <option value="">全部类型</option>
+                <option value="product_knowledge">商品知识</option>
+                <option value="size_guide">尺码指南</option>
+                <option value="after_sales_policy">售后政策</option>
+                <option value="logistics_policy">物流规则</option>
+                <option value="store_rule">店铺规则</option>
+                <option value="faq">FAQ</option>
+              </select>
+            </label>
+            <label class="filter-control">解析状态
+              <select id="knowledgeParseFilter">
+                <option value="">全部状态</option>
+                <option value="pending">待解析</option>
+                <option value="running">解析中</option>
+                <option value="succeeded">解析成功</option>
+                <option value="failed">解析失败</option>
+              </select>
+            </label>
+            <label class="filter-control">审核状态
+              <select id="knowledgeReviewFilter">
+                <option value="">全部状态</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+              </select>
+            </label>
+            <button class="button secondary" type="submit">查询</button>
+            <button class="button secondary" id="clearKnowledgeFiltersBtn" type="button">清除</button>
+          </form>
+          <button class="button primary" id="openKnowledgeUploadBtn" type="button">上传商家资料</button>
+        </section>
+        <p class="knowledge-boundary-note">文档只属于当前登录管理员所在租户；审核通过不会在本阶段自动修改线上 Chroma。</p>
+        <div id="adminKnowledgeContent"></div>
+        <div class="pagination" id="adminKnowledgePagination"></div>
       </div>
 
       <div class="hidden" data-admin-panel="orders">
@@ -362,6 +407,76 @@
         <button class="button primary" id="saveCaseAnnotationBtn" type="submit">保存标注</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="detail-dialog knowledge-upload-dialog" id="knowledgeUploadDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">KNOWLEDGE UPLOAD</p>
+        <h2>上传知识文档</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="knowledgeUploadDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <form id="knowledgeUploadForm" class="knowledge-form">
+      <label>文档标题
+        <input id="knowledgeUploadTitle" maxlength="200" required placeholder="例如：退款与换货政策">
+      </label>
+      <label>知识类型
+        <select id="knowledgeUploadType" required>
+          <option value="after_sales_policy">售后政策</option>
+          <option value="product_knowledge">商品知识</option>
+          <option value="size_guide">尺码指南</option>
+          <option value="logistics_policy">物流规则</option>
+          <option value="store_rule">店铺规则</option>
+          <option value="faq">FAQ</option>
+        </select>
+      </label>
+      <label>分类
+        <input id="knowledgeUploadCategory" maxlength="100" value="通用" required>
+      </label>
+      <label>原始文件
+        <input id="knowledgeUploadFile" type="file" accept=".txt,.md,.pdf,.docx,.pptx,.html,.htm,.csv" required>
+      </label>
+      <p class="form-help">支持 TXT、Markdown、PDF、DOCX、PPTX、HTML、CSV，单文件不超过 25MB。</p>
+      <p class="form-error" id="knowledgeUploadError" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancelKnowledgeUploadBtn" type="button">取消</button>
+        <button class="button primary" id="submitKnowledgeUploadBtn" type="submit">上传文档</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="detail-dialog knowledge-detail-dialog" id="knowledgeDetailDialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">KNOWLEDGE REVIEW</p>
+        <h2 id="knowledgeDetailTitle">知识文档详情</h2>
+      </div>
+      <button class="icon-button" data-close-dialog="knowledgeDetailDialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="knowledge-detail-body">
+      <div id="knowledgeDetailSummary"></div>
+      <section class="knowledge-quality-panel" id="knowledgeQualityPanel"></section>
+      <label class="knowledge-editor-label">解析后内容
+        <textarea id="knowledgeContentEditor" spellcheck="false" placeholder="文档解析成功后可在这里预览和修订内容"></textarea>
+      </label>
+      <p class="form-error" id="knowledgeDetailError" role="alert"></p>
+      <div class="knowledge-review-actions">
+        <button class="button secondary" id="parseKnowledgeBtn" type="button">开始解析</button>
+        <button class="button secondary" id="saveKnowledgeContentBtn" type="button">保存修订</button>
+        <button class="button primary" id="approveKnowledgeBtn" type="button">审核通过</button>
+      </div>
+      <div class="knowledge-reject-row">
+        <input id="knowledgeRejectReason" maxlength="500" placeholder="拒绝原因，例如：规则缺少活动商品例外说明">
+        <button class="button danger" id="rejectKnowledgeBtn" type="button">拒绝</button>
+      </div>
+      <form id="knowledgeRevisionUploadForm" class="knowledge-revision-upload">
+        <label>上传新版本
+          <input id="knowledgeRevisionFile" type="file" accept=".txt,.md,.pdf,.docx,.pptx,.html,.htm,.csv" required>
+        </label>
+        <button class="button secondary" id="submitKnowledgeRevisionBtn" type="submit">创建新版本</button>
+      </form>
+    </div>
   </dialog>
 
   <div class="toast hidden" id="adminToast" role="status"></div>

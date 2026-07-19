@@ -15,7 +15,16 @@ from app.core.database import Base
 from app.core.passwords import hash_password
 from app.dependencies import get_db
 from app.models import Order, Product, Tenant, User
-from app.routers import admin, auth, chat, demo_store, orders, refunds, tickets
+from app.routers import (
+    admin,
+    auth,
+    chat,
+    demo_store,
+    knowledge,
+    orders,
+    refunds,
+    tickets,
+)
 
 
 CUSTOMER_PASSWORD = "CustomerPassword123!"
@@ -48,6 +57,7 @@ class ApiTestCase(unittest.TestCase):
         api.include_router(tickets.router, prefix="/api")
         api.include_router(refunds.router, prefix="/api")
         api.include_router(admin.router, prefix="/api")
+        api.include_router(knowledge.router, prefix="/api")
 
         def override_db():
             db = self.Session()

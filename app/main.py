@@ -21,7 +21,16 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.routers import admin, auth, chat, demo_store, orders, refunds, tickets
+from app.routers import (
+    admin,
+    auth,
+    chat,
+    demo_store,
+    knowledge,
+    orders,
+    refunds,
+    tickets,
+)
 
 # ── 日志配置 ──
 logging.basicConfig(
@@ -63,6 +72,7 @@ fastapi_app.include_router(orders.router, prefix="/api")
 fastapi_app.include_router(tickets.router, prefix="/api")
 fastapi_app.include_router(refunds.router, prefix="/api")
 fastapi_app.include_router(admin.router, prefix="/api")
+fastapi_app.include_router(knowledge.router, prefix="/api")
 
 # ── 可选的静态文件挂载（前端） ──
 

@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     DOCLING_ARTIFACTS_PATH: Path = Path(
         r"D:\docling_models"
     )
+    KNOWLEDGE_STORAGE_ROOT: Path = (
+        PROJECT_ROOT_PATH / "data" / "knowledge" / "tenants"
+    )
 
     # ── FastAPI ──
     HOST: str = "127.0.0.1"

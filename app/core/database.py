@@ -55,6 +55,7 @@ def init_db():
     from app.models import (  # noqa: F401
         Tenant, User, Product, Order, Ticket, RefundRequest,
         AgentTrace, AgentTraceStep, UnresolvedCase, ConversationState,
+        KnowledgeDocument, KnowledgeRevision,
     )
 
     Base.metadata.create_all(bind=engine)
@@ -66,8 +67,12 @@ def init_db():
             from scripts.migrate_unresolved_case_review import (
                 migrate as migrate_unresolved_case,
             )
+            from scripts.migrate_knowledge_lifecycle import (
+                migrate as migrate_knowledge_lifecycle,
+            )
 
             migrate_ticket(Path(database_path))
             migrate_trace(Path(database_path))
             migrate_unresolved_case(Path(database_path))
+            migrate_knowledge_lifecycle(Path(database_path))
     logger.info("数据库表结构已就绪 - %s", settings.resolved_database_url)

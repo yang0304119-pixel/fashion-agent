@@ -153,8 +153,31 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn("/api/admin/unresolved-cases", script)
         self.assertIn("method: 'PATCH'", script)
         self.assertIn("should_add_to_kb", script)
-        self.assertNotIn("chroma", script.lower())
-        self.assertNotIn("vector_store", script.lower())
+        case_workspace_script = script[
+            script.index("async function loadCases"):
+            script.index("function renderCasePagination")
+        ]
+        self.assertNotIn("chroma", case_workspace_script.lower())
+        self.assertNotIn("vector_store", case_workspace_script.lower())
+
+    def test_admin_knowledge_document_lifecycle_workspace_exists(self):
+        html = (FRONTEND_ROOT / "admin.html").read_text(encoding="utf-8")
+        script = (FRONTEND_ROOT / "js" / "admin.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('data-admin-view="knowledge"', html)
+        self.assertIn('data-admin-panel="knowledge"', html)
+        self.assertIn('id="knowledgeUploadForm"', html)
+        self.assertIn('id="knowledgeContentEditor"', html)
+        self.assertIn('id="approveKnowledgeBtn"', html)
+        self.assertIn('id="rejectKnowledgeBtn"', html)
+        self.assertIn("/api/admin/knowledge/documents", script)
+        self.assertIn("/parse", script)
+        self.assertIn("/content", script)
+        self.assertIn("/approve", script)
+        self.assertIn("/reject", script)
+        self.assertIn("本阶段不会自动修改线上 Chroma", script)
+        self.assertNotIn("tenant_id", html)
 
     def test_customer_and_admin_pages_show_mock_money_warning(self):
         customer_html = (FRONTEND_ROOT / "demo-chat.html").read_text(encoding="utf-8")
