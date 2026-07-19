@@ -130,3 +130,14 @@ def requires_business_tool(question: str) -> bool:
         pattern.search(question)
         for pattern in HIGH_RISK_ACTION_PATTERNS
     )
+
+
+def safe_relative_source(value: object) -> str:
+    """仅保留可展示的相对来源，拒绝绝对路径和父目录跳转。"""
+    source = str(value or "").strip().replace("\\", "/")
+    if not source or source.startswith("/") or ":" in source:
+        return ""
+    parts = [part for part in source.split("/") if part not in {"", "."}]
+    if ".." in parts:
+        return ""
+    return "/".join(parts)

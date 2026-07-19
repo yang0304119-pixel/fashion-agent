@@ -17,6 +17,7 @@ class RagTenantContractTests(unittest.TestCase):
             "退款政策是什么？",
             tenant_id=7,
             build_id=19,
+            top_k=3,
         )
         self.assertEqual(result["answer"], "知识库中没有找到相关信息。")
 

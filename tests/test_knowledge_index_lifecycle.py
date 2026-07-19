@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -265,6 +265,101 @@ class KnowledgeIndexLifecycleTests(ApiTestCase):
         self.assertTrue(
             any("候选第二版答案" in doc.page_content for doc in candidate_docs)
         )
+
+    def test_question_test_selects_active_or_candidate_and_returns_safe_scores(self):
+        document = self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="退款测试规则",
+            content="# 退款测试规则\n\n线上版本：签收七天内可以申请退款。",
+        )
+        active = self._create_candidate(self.admin_a_headers)
+        self._activate(self.admin_a_headers, active["id"])
+
+        candidate_revision = self._upload_revision(
+            headers=self.admin_a_headers,
+            document_id=document["id"],
+            filename="candidate-test.md",
+            content="# 退款测试规则\n\n候选版本：签收超过七天不可无理由退款。",
+        )["latest_revision"]
+        self._parse_and_approve(
+            self.admin_a_headers,
+            candidate_revision["id"],
+        )
+        candidate = self._create_candidate(self.admin_a_headers)
+
+        answer_chain = Mock()
+        answer_chain.invoke.return_value = "请以对应知识版本为准 [S1]"
+        with patch("app.rag.service.answer_chain", answer_chain):
+            active_result = self._test_question(active["id"])
+            candidate_result = self._test_question(candidate["id"])
+
+        self.assertEqual(active_result["build"]["status"], "active")
+        self.assertEqual(candidate_result["build"]["status"], "ready")
+        self.assertIn("线上版本", active_result["hits"][0]["preview"])
+        self.assertIn("候选版本", candidate_result["hits"][0]["preview"])
+        hit = candidate_result["hits"][0]
+        self.assertEqual(hit["revision_id"], candidate_revision["id"])
+        self.assertEqual(hit["version_no"], 2)
+        for key in ("dense_score", "bm25_score", "fusion_score"):
+            self.assertIsInstance(hit[key], float)
+        self.assertEqual(hit["relative_source"], f"documents/{document['id']}/revisions/{candidate_revision['id']}")
+        serialized = str(candidate_result)
+        self.assertNotIn(str(settings.KNOWLEDGE_STORAGE_ROOT), serialized)
+        self.assertNotIn(":\\", serialized)
+
+    def test_question_test_rejects_cross_tenant_build(self):
+        self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="租户一测试规则",
+            content="# 租户一测试规则\n\n仅租户一可见。",
+        )
+        candidate = self._create_candidate(self.admin_a_headers)
+        response = self.client.post(
+            "/api/admin/knowledge/question-tests",
+            headers=self.admin_b_headers,
+            json={
+                "question": "退款规则是什么？",
+                "build_id": candidate["id"],
+                "top_k": 5,
+            },
+        )
+        self.assertEqual(response.status_code, 404, response.text)
+
+    def test_question_test_defaults_to_current_active_build(self):
+        self._create_approved_document(
+            headers=self.admin_a_headers,
+            title="默认线上测试规则",
+            content="# 默认线上测试规则\n\n当前线上回答内容。",
+        )
+        active = self._create_candidate(self.admin_a_headers)
+        self._activate(self.admin_a_headers, active["id"])
+        answer_chain = Mock()
+        answer_chain.invoke.return_value = "当前线上回答 [S1]"
+        with patch("app.rag.service.answer_chain", answer_chain):
+            response = self.client.post(
+                "/api/admin/knowledge/question-tests",
+                headers=self.admin_a_headers,
+                json={
+                    "question": "当前规则是什么？",
+                    "build_id": None,
+                    "top_k": 3,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["build"]["id"], active["id"])
+
+    def _test_question(self, build_id: int) -> dict:
+        response = self.client.post(
+            "/api/admin/knowledge/question-tests",
+            headers=self.admin_a_headers,
+            json={
+                "question": "签收七天后还能退款吗？",
+                "build_id": build_id,
+                "top_k": 5,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["data"]
 
     def _create_candidate(self, headers: dict[str, str]) -> dict:
         response = self.client.post(

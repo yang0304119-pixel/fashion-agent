@@ -129,3 +129,53 @@ class KnowledgeRollbackRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_build_id: int | None = Field(default=None, gt=0)
+
+
+class KnowledgeQuestionTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=2000)
+    build_id: int | None = Field(default=None, gt=0)
+    top_k: int = Field(default=5, ge=1, le=10)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("测试问题不能为空")
+        return normalized
+
+
+class KnowledgeRetrievalHitData(BaseModel):
+    rank: int
+    source_id: str
+    title: str
+    knowledge_type: str
+    category: str
+    document_id: int | None
+    revision_id: int | None
+    version_no: int | None
+    chunk_id: str
+    relative_source: str
+    preview: str
+    dense_score: float
+    dense_rank: int
+    bm25_score: float
+    bm25_rank: int
+    fusion_score: float
+    fusion_rank: int
+
+
+class KnowledgeQuestionTestData(BaseModel):
+    build: KnowledgeIndexBuildData
+    answer: str
+    original_query: str
+    rewritten_query: str
+    knowledge_type_filter: str | None
+    hits: list[KnowledgeRetrievalHitData]
+
+
+class KnowledgeQuestionTestResponse(BaseModel):
+    success: bool = True
+    data: KnowledgeQuestionTestData

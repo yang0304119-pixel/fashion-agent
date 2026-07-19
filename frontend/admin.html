@@ -143,6 +143,36 @@
           <div id="knowledgeBuildsContent"></div>
           <div class="pagination" id="knowledgeBuildsPagination"></div>
         </section>
+        <section class="knowledge-test-bench">
+          <div class="table-heading">
+            <div>
+              <p class="eyebrow">PRE-LAUNCH QA</p>
+              <h2>知识库测试台与来源预览</h2>
+              <p>在上线前选择当前线上或候选版本，核对回答、Top-K 召回和混合检索分数。</p>
+            </div>
+          </div>
+          <form id="knowledgeTestForm" class="knowledge-test-form">
+            <label>测试问题
+              <textarea id="knowledgeTestQuestion" maxlength="2000" required placeholder="例如：签收七天后还能退款吗？"></textarea>
+            </label>
+            <div class="knowledge-test-controls">
+              <label>测试版本
+                <select id="knowledgeTestBuild" required></select>
+              </label>
+              <label>Top-K
+                <select id="knowledgeTestTopK">
+                  <option value="3">3</option>
+                  <option value="5" selected>5</option>
+                  <option value="8">8</option>
+                  <option value="10">10</option>
+                </select>
+              </label>
+              <button class="button primary" id="runKnowledgeTestBtn" type="submit">运行测试</button>
+            </div>
+          </form>
+          <p class="knowledge-boundary-note">来源响应仅包含相对标识、文档版本和命中段落，不返回服务器文件绝对路径。</p>
+          <div id="knowledgeTestResult" class="knowledge-test-result"></div>
+        </section>
         <div id="adminKnowledgeContent"></div>
         <div class="pagination" id="adminKnowledgePagination"></div>
       </div>

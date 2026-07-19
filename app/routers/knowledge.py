@@ -21,6 +21,10 @@ from app.schemas.knowledge import (
     KnowledgeIndexBuildListResponse,
     KnowledgeIndexBuildResponse,
     KnowledgeRollbackRequest,
+    KnowledgeQuestionTestData,
+    KnowledgeQuestionTestRequest,
+    KnowledgeQuestionTestResponse,
+    KnowledgeRetrievalHitData,
 )
 from app.services.knowledge_document_service import (
     KNOWLEDGE_TYPES,
@@ -37,9 +41,53 @@ from app.services.knowledge_index_service import (
     KnowledgeIndexService,
     KnowledgeIndexStateError,
 )
+from app.services.knowledge_test_service import KnowledgeTestService
+from app.rag.errors import RagError
 
 
 router = APIRouter(prefix="/admin/knowledge", tags=["admin-knowledge"])
+
+
+@router.post(
+    "/question-tests",
+    response_model=KnowledgeQuestionTestResponse,
+)
+def test_knowledge_question(
+    request: KnowledgeQuestionTestRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> KnowledgeQuestionTestResponse:
+    try:
+        result = KnowledgeTestService(db).test_question(
+            tenant_id=admin.tenant_id,
+            question=request.question,
+            build_id=request.build_id,
+            top_k=request.top_k,
+        )
+    except KnowledgeIndexNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except KnowledgeIndexStateError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RagError as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"知识库测试失败：{error.info.code}",
+        ) from error
+    return KnowledgeQuestionTestResponse(
+        data=KnowledgeQuestionTestData(
+            build=_index_build_data(result.build),
+            answer=result.answer,
+            original_query=result.original_query,
+            rewritten_query=result.rewritten_query,
+            knowledge_type_filter=result.knowledge_type_filter,
+            hits=[
+                KnowledgeRetrievalHitData(**hit)
+                for hit in result.hits
+            ],
+        )
+    )
 
 
 @router.get(

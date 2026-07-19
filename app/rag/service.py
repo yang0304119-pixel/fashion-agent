@@ -13,7 +13,7 @@ from app.rag.config import (
 )
 from app.rag.errors import RagError
 from app.rag.retriever import retrieve
-from app.rag.security import requires_business_tool
+from app.rag.security import requires_business_tool, safe_relative_source
 
 
 prompt = ChatPromptTemplate.from_messages([
@@ -54,7 +54,7 @@ def _source_from_document(
         "type": str(metadata.get("type", "")),
         "category": str(metadata.get("category", "")),
         "relative_source": str(
-            metadata.get("relative_source", "")
+            safe_relative_source(metadata.get("relative_source", ""))
         ),
         "chunk_id": str(
             metadata.get("chunk_id")
@@ -165,6 +165,7 @@ def answer_question(
     *,
     tenant_id: int,
     build_id: int | None = None,
+    top_k: int = 3,
 ) -> dict:
     question = question.strip()
 
@@ -183,7 +184,21 @@ def answer_question(
         question,
         tenant_id=tenant_id,
         build_id=build_id,
+        top_k=top_k,
     )
+
+    return answer_from_documents(
+        question,
+        documents=documents,
+    )
+
+
+def answer_from_documents(
+    question: str,
+    *,
+    documents: list[Document],
+) -> dict:
+    """基于已经召回的文档生成回答，供消费者链路和管理测试台复用。"""
 
     if not documents:
         return {

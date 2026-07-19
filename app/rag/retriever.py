@@ -64,6 +64,8 @@ def _load_bm25_documents(
 def _fuse_results(
     dense_results: list[tuple[Document, float]],
     bm25_results: list[BM25Result],
+    *,
+    top_k: int,
 ) -> list[Document]:
     documents: dict[str, Document] = {}
     fusion_scores: defaultdict[str, float] = (
@@ -83,6 +85,7 @@ def _fuse_results(
         document.metadata["dense_score"] = float(
             relevance
         )
+        document.metadata["dense_rank"] = rank
 
     for rank, result in enumerate(
         bm25_results,
@@ -100,6 +103,7 @@ def _fuse_results(
         document.metadata["bm25_score"] = float(
             result.score
         )
+        document.metadata["bm25_rank"] = rank
 
     ranked_keys = sorted(
         fusion_scores,
@@ -131,15 +135,23 @@ def _fuse_results(
         normalized_fusion_score = (
             fusion_scores[key] / maximum_score
         )
+        document.metadata.setdefault("dense_score", 0.0)
+        document.metadata.setdefault("dense_rank", 0)
+        document.metadata.setdefault("bm25_score", 0.0)
+        document.metadata.setdefault("bm25_rank", 0)
+        document.metadata["fusion_raw_score"] = float(
+            fusion_scores[key]
+        )
         document.metadata["fusion_score"] = float(
             normalized_fusion_score
         )
+        document.metadata["fusion_rank"] = len(ranked_documents) + 1
         document.metadata["relevance_score"] = float(
             normalized_fusion_score
         )
         ranked_documents.append(document)
 
-        if len(ranked_documents) >= RAG_TOP_K:
+        if len(ranked_documents) >= top_k:
             break
 
     return ranked_documents
@@ -150,11 +162,16 @@ def retrieve(
     *,
     tenant_id: int,
     build_id: int | None = None,
+    top_k: int = RAG_TOP_K,
 ) -> list[Document]:
     query = query.strip()
 
     if not query:
         return []
+    if top_k <= 0:
+        return []
+
+    fetch_k = max(RAG_FETCH_K, top_k)
 
     rewritten_query = rewrite_query(query)
     knowledge_type = infer_knowledge_type(
@@ -197,7 +214,7 @@ def retrieve(
             vector_store
             .similarity_search_by_vector_with_relevance_scores(
                 embedding=query_embedding,
-                k=RAG_FETCH_K,
+                k=fetch_k,
                 filter=metadata_filter,
             )
         )
@@ -216,11 +233,12 @@ def retrieve(
     bm25_results = search_bm25(
         f"{query} {rewritten_query}",
         bm25_documents,
-        top_k=RAG_FETCH_K,
+        top_k=fetch_k,
     )
     documents = _fuse_results(
         dense_results,
         bm25_results,
+        top_k=top_k,
     )
 
     for document in documents:

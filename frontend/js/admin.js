@@ -25,6 +25,7 @@ const state = {
   selectedCaseId: null,
   knowledgePage: 1,
   knowledgeBuildsPage: 1,
+  knowledgeBuilds: [],
   selectedKnowledgeDocumentId: null,
   selectedKnowledgeRevisionId: null,
   selectedRefund: null,
@@ -139,6 +140,7 @@ function bindEvents() {
   document.getElementById('knowledgeRevisionUploadForm').addEventListener('submit', uploadKnowledgeRevision);
   document.getElementById('createKnowledgeBuildBtn').addEventListener('click', createKnowledgeBuild);
   document.getElementById('rollbackKnowledgeBuildBtn').addEventListener('click', rollbackKnowledgeBuild);
+  document.getElementById('knowledgeTestForm').addEventListener('submit', runKnowledgeTest);
   document.querySelectorAll('.metric-tab').forEach((tab) => {
     tab.addEventListener('click', () => selectStatus(tab.dataset.status));
   });
@@ -311,22 +313,30 @@ async function loadKnowledgeBuilds() {
     page_size: 10,
   });
   try {
-    const payload = await requestJson(`/api/admin/knowledge/index-builds?${params}`);
-    renderKnowledgeBuildSummary(payload.data);
+    const [payload, activePayload, readyPayload] = await Promise.all([
+      requestJson(`/api/admin/knowledge/index-builds?${params}`),
+      requestJson('/api/admin/knowledge/index-builds?status=active&page=1&page_size=1'),
+      requestJson('/api/admin/knowledge/index-builds?status=ready&page=1&page_size=100'),
+    ]);
+    const testableBuilds = [...readyPayload.data, ...activePayload.data];
+    state.knowledgeBuilds = testableBuilds;
+    renderKnowledgeBuildSummary(payload.data, activePayload.data[0], readyPayload.data[0]);
     renderKnowledgeBuilds(container, payload.data);
     renderKnowledgeBuildsPagination(payload);
+    renderKnowledgeTestBuildOptions(testableBuilds);
   } catch (error) {
     showErrorState(container, error.message);
     document.getElementById('knowledgeBuildSummary').replaceChildren();
     document.getElementById('knowledgeBuildsPagination').replaceChildren();
+    renderKnowledgeTestBuildOptions([]);
   }
 }
 
 
-function renderKnowledgeBuildSummary(builds) {
+function renderKnowledgeBuildSummary(builds, activeBuild = null, readyBuild = null) {
   const summary = document.getElementById('knowledgeBuildSummary');
-  const active = builds.find((build) => build.status === 'active');
-  const ready = builds.find((build) => build.status === 'ready');
+  const active = activeBuild || builds.find((build) => build.status === 'active');
+  const ready = readyBuild || builds.find((build) => build.status === 'ready');
   const latest = builds[0];
   summary.replaceChildren(
     knowledgeBuildMetric('当前线上版本', active ? `Build #${active.id}` : '尚未上线'),
@@ -390,6 +400,132 @@ function renderKnowledgeBuilds(container, builds) {
   table.append(head, body);
   wrapper.appendChild(table);
   container.replaceChildren(wrapper);
+}
+
+
+function renderKnowledgeTestBuildOptions(builds) {
+  const select = document.getElementById('knowledgeTestBuild');
+  const previous = select.value;
+  select.replaceChildren();
+  const testable = builds.filter((build) => ['active', 'ready', 'superseded'].includes(build.status));
+  testable.forEach((build) => {
+    const option = document.createElement('option');
+    option.value = String(build.id);
+    const role = build.status === 'active'
+      ? '当前线上'
+      : build.status === 'ready'
+        ? '候选版本'
+        : '历史版本';
+    option.textContent = `${role} · Build #${build.id} · ${build.chunk_count} chunks`;
+    select.appendChild(option);
+  });
+  if (testable.some((build) => String(build.id) === previous)) {
+    select.value = previous;
+  } else {
+    const candidate = testable.find((build) => build.status === 'ready');
+    const active = testable.find((build) => build.status === 'active');
+    select.value = String(candidate?.id || active?.id || testable[0]?.id || '');
+  }
+  select.disabled = !testable.length;
+  document.getElementById('runKnowledgeTestBtn').disabled = !testable.length;
+  if (!testable.length) {
+    showEmptyState(
+      document.getElementById('knowledgeTestResult'),
+      '暂无可测试知识库版本',
+      '请先构建候选知识库，或上线一个成功版本。',
+    );
+  }
+}
+
+
+async function runKnowledgeTest(event) {
+  event.preventDefault();
+  const question = document.getElementById('knowledgeTestQuestion').value.trim();
+  const buildId = Number(document.getElementById('knowledgeTestBuild').value);
+  const topK = Number(document.getElementById('knowledgeTestTopK').value);
+  const result = document.getElementById('knowledgeTestResult');
+  const button = document.getElementById('runKnowledgeTestBtn');
+  if (!question || !buildId) return;
+  button.disabled = true;
+  showLoadingState(result, '正在生成回答并分析混合检索结果…');
+  try {
+    const payload = await requestJson('/api/admin/knowledge/question-tests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, build_id: buildId, top_k: topK }),
+    });
+    renderKnowledgeTestResult(payload.data);
+  } catch (error) {
+    showErrorState(result, error.message || '知识库测试失败。');
+  } finally {
+    button.disabled = !document.getElementById('knowledgeTestBuild').value;
+  }
+}
+
+
+function renderKnowledgeTestResult(data) {
+  const container = document.getElementById('knowledgeTestResult');
+  const summary = element('div', 'knowledge-test-summary');
+  summary.append(
+    knowledgeBuildMetric('测试版本', `Build #${data.build.id} · ${knowledgeBuildStatusLabel(data.build.status)}`),
+    knowledgeBuildMetric('召回数量', `${data.hits.length} 条`),
+    knowledgeBuildMetric('知识类型过滤', data.knowledge_type_filter || '未限定'),
+  );
+  const queryPanel = element('section', 'knowledge-query-panel');
+  const queryTitle = document.createElement('strong');
+  queryTitle.textContent = '查询改写';
+  const queryText = document.createElement('p');
+  queryText.textContent = data.original_query === data.rewritten_query
+    ? `未改写：${data.original_query}`
+    : `原问题：${data.original_query}\n改写后：${data.rewritten_query}`;
+  queryPanel.append(queryTitle, queryText);
+  const answer = element('section', 'knowledge-answer-card');
+  const answerTitle = document.createElement('strong');
+  answerTitle.textContent = '候选回答';
+  const answerText = document.createElement('pre');
+  answerText.textContent = data.answer;
+  answer.append(answerTitle, answerText);
+  const hits = element('div', 'knowledge-hit-list');
+  if (!data.hits.length) {
+    showEmptyState(hits, '没有召回结果', '当前版本无法为该问题找到达到阈值的知识段落。');
+  } else {
+    data.hits.forEach((hit) => hits.appendChild(knowledgeHitCard(hit)));
+  }
+  container.replaceChildren(summary, queryPanel, answer, hits);
+}
+
+
+function knowledgeHitCard(hit) {
+  const card = element('article', 'knowledge-hit-card');
+  const header = element('div', 'knowledge-hit-header');
+  const title = document.createElement('strong');
+  title.textContent = `#${hit.rank} [${hit.source_id}] ${hit.title || '未命名来源'}`;
+  const version = document.createElement('span');
+  version.textContent = `文档 #${hit.document_id || '—'} · v${hit.version_no || '—'} · Revision #${hit.revision_id || '—'}`;
+  header.append(title, version);
+  const scores = element('div', 'knowledge-score-grid');
+  [
+    ['Dense', hit.dense_score, hit.dense_rank],
+    ['BM25', hit.bm25_score, hit.bm25_rank],
+    ['融合', hit.fusion_score, hit.fusion_rank],
+  ].forEach(([label, score, rank]) => {
+    const item = document.createElement('span');
+    item.textContent = `${label} ${formatScore(score)} · rank ${rank || '—'}`;
+    scores.appendChild(item);
+  });
+  const meta = document.createElement('p');
+  meta.className = 'knowledge-hit-meta';
+  meta.textContent = `${knowledgeTypeLabel(hit.knowledge_type)} · ${hit.category || '未分类'} · ${hit.relative_source || '安全来源标识不可用'} · Chunk ${hit.chunk_id}`;
+  const preview = document.createElement('pre');
+  preview.className = 'knowledge-hit-preview';
+  preview.textContent = hit.preview;
+  card.append(header, scores, meta, preview);
+  return card;
+}
+
+
+function formatScore(value) {
+  return Number(value || 0).toFixed(4);
 }
 
 
