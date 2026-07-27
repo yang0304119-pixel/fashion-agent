@@ -28,7 +28,10 @@ WORKFLOW_BY_INTENT = {
     "fallback": "fallback_workflow",
 }
 ERROR_STAGE_BY_NODE = {
+    "memory_load": "memory_load",
+    "goal_guard": "goal_authorization",
     "router": "router",
+    "boundary_guard": "goal_authorization",
     "rag": "rag_retrieval",
     "react": "react_planning",
     "order": "order_query",
@@ -39,6 +42,8 @@ ERROR_STAGE_BY_NODE = {
     "handoff": "human_handoff",
     "answer": "tool_execution",
     "conversation_state": "conversation_state",
+    "memory_retrieve": "memory_retrieve",
+    "memory_commit": "memory_commit",
     "trace": "trace_persistence",
 }
 TOOL_BY_NODE = {
@@ -120,6 +125,66 @@ def traced_node(node_name: str, node: Callable[[AgentState], dict]) -> Callable:
     return wrapped
 
 
+def record_tool_call_attempts(
+    *,
+    trace_id: int | None,
+    tool_name: str,
+    attempts: list[dict],
+    workflow_name: str | None = "react_readonly_workflow",
+) -> None:
+    """逐次持久化工具/上游调用，包含失败分类和恢复动作。"""
+    if not trace_id or not attempts:
+        return
+    db = SessionLocal()
+    try:
+        sequence = (
+            db.query(func.max(AgentTraceStep.sequence))
+            .filter(AgentTraceStep.trace_id == trace_id)
+            .scalar()
+            or 0
+        )
+        for offset, attempt in enumerate(attempts, start=1):
+            error = attempt.get("error") or {}
+            status = (
+                "succeeded"
+                if attempt.get("status") == "succeeded"
+                else "failed"
+            )
+            retry_delay = attempt.get("retry_delay_seconds")
+            db.add(AgentTraceStep(
+                trace_id=trace_id,
+                sequence=sequence + offset,
+                node_name="tool_call",
+                workflow_name=workflow_name,
+                status=status,
+                tool_name=tool_name,
+                attempt=attempt.get("attempt"),
+                input=_safe_serialize(attempt.get("input")),
+                output=_safe_serialize(attempt.get("output")),
+                error_category=error.get("category"),
+                retryable=error.get("retryable") if error else None,
+                recovery_action=attempt.get("recovery_action"),
+                retry_delay_ms=(
+                    max(0, round(float(retry_delay) * 1000))
+                    if retry_delay is not None
+                    else None
+                ),
+                error_stage="tool_execution" if error else None,
+                error_code=error.get("code"),
+                error_type=error.get("category"),
+                error_message=error.get("message"),
+                started_at=_utc_now(),
+                finished_at=_utc_now(),
+                duration_ms=max(0, int(attempt.get("duration_ms") or 0)),
+            ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("工具调用尝试记录失败: %s", tool_name)
+    finally:
+        db.close()
+
+
 def finalize_request_trace(state: AgentState) -> int | None:
     """在Graph收尾时把最终状态更新到已存在的请求汇总。"""
     trace_id = state.get("trace_id")
@@ -196,20 +261,44 @@ def record_trace(state: AgentState) -> int | None:
 def record_unresolved(state: AgentState) -> int | None:
     intent = state.get("intent", "")
     confidence = state.get("confidence", 0.0)
-    if state.get("fallback_handled", False):
+    human_required = bool(state.get("human_required", False))
+    if state.get("fallback_handled", False) and not human_required:
         return None
-    if intent != "fallback" and confidence >= 0.5:
+    if not human_required and intent != "fallback" and confidence >= 0.5:
+        return None
+    tool_result = state.get("tool_result") or {}
+    tool_data = tool_result.get("data") if isinstance(tool_result, dict) else None
+    if (
+        human_required
+        and intent == "refund_request"
+        and isinstance(tool_data, dict)
+        and tool_data.get("ticket_id")
+    ):
+        # 退款工作流已经创建专用审核/异常工单，避免重复进入通用人工队列。
         return None
 
     db = SessionLocal()
     try:
+        existing = db.query(UnresolvedCase).filter(
+            UnresolvedCase.tenant_id == state.get("tenant_id", 0),
+            UnresolvedCase.user_id == state.get("user_id", 0),
+            UnresolvedCase.user_message == state.get("message", ""),
+            UnresolvedCase.predicted_intent == intent,
+            UnresolvedCase.is_resolved.is_not(True),
+        ).first()
+        if existing is not None:
+            return existing.id
         case = UnresolvedCase(
             tenant_id=state.get("tenant_id", 0),
             user_id=state.get("user_id", 0),
             user_message=state.get("message", ""),
             predicted_intent=intent,
             confidence=confidence,
-            fallback_reason="低置信度" if confidence < 0.5 else "无法识别意图",
+            fallback_reason=(
+                str(state.get("boundary_reason") or "需要人工处理")[:200]
+                if human_required
+                else ("低置信度" if confidence < 0.5 else "无法识别意图")
+            ),
             final_answer=state.get("final_answer", ""),
             is_resolved=False,
         )
@@ -375,11 +464,22 @@ def _trace_output(state: AgentState) -> dict:
         "router_source": state.get("router_source"),
         "router_evidence": state.get("router_evidence"),
         "requires_planning": state.get("requires_planning"),
+        "boundary_status": state.get("boundary_status"),
+        "boundary_action_class": state.get("boundary_action_class"),
+        "boundary_risk_level": state.get("boundary_risk_level"),
+        "boundary_reason": state.get("boundary_reason"),
+        "boundary_original_intent": state.get("boundary_original_intent"),
+        "approval_required": state.get("approval_required"),
+        "handoff_case_id": state.get("handoff_case_id"),
+        "execution_started_at": state.get("execution_started_at"),
+        "execution_deadline_at": state.get("execution_deadline_at"),
+        "execution_budget": _safe_serialize(state.get("execution_budget") or {}),
         "missing_slots": state.get("missing_slots"),
         "pending_intent": state.get("pending_intent"),
         "collected_slots": _safe_serialize(state.get("collected_slots")),
         "tool_result": _safe_serialize(state.get("tool_result")),
         "tool_status": state.get("tool_status"),
+        "tool_attempts": _safe_serialize(state.get("tool_attempts") or []),
         "risk_level": state.get("risk_level"),
         "human_required": state.get("human_required"),
         "refund_request_id": state.get("refund_request_id"),
@@ -391,6 +491,13 @@ def _trace_output(state: AgentState) -> dict:
         "rag_error_code": state.get("rag_error_code"),
         "rag_error_stage": state.get("rag_error_stage"),
         "rag_error_type": state.get("rag_error_type"),
+        "recent_turns": _safe_serialize(state.get("recent_turns") or []),
+        "conversation_summary": _safe_serialize(state.get("conversation_summary")),
+        "task_checkpoint": _safe_serialize(state.get("task_checkpoint")),
+        "retrieved_memories": _safe_serialize(state.get("retrieved_memories") or []),
+        "memory_candidates": _safe_serialize(state.get("memory_candidates") or []),
+        "memory_write_results": _safe_serialize(state.get("memory_write_results") or []),
+        "context_token_budget": _safe_serialize(state.get("context_token_budget") or {}),
     }
 
 

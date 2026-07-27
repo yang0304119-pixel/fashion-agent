@@ -21,6 +21,9 @@ from app.routers import (
     chat,
     demo_store,
     knowledge,
+    memories,
+    agentops,
+    tenant_users,
     orders,
     refunds,
     tickets,
@@ -58,6 +61,10 @@ class ApiTestCase(unittest.TestCase):
         api.include_router(refunds.router, prefix="/api")
         api.include_router(admin.router, prefix="/api")
         api.include_router(knowledge.router, prefix="/api")
+        api.include_router(memories.router, prefix="/api")
+        api.include_router(memories.admin_router, prefix="/api")
+        api.include_router(agentops.router, prefix="/api")
+        api.include_router(tenant_users.router, prefix="/api")
 
         def override_db():
             db = self.Session()
@@ -81,6 +88,9 @@ class ApiTestCase(unittest.TestCase):
                 self.Session,
             ),
             patch("app.services.trace_service.SessionLocal", self.Session),
+            patch("app.agent.nodes.memory_load_node.SessionLocal", self.Session),
+            patch("app.agent.nodes.memory_retrieve_node.SessionLocal", self.Session),
+            patch("app.agent.nodes.memory_commit_node.SessionLocal", self.Session),
         ]
         for session_patch in self.session_patches:
             session_patch.start()
@@ -135,7 +145,7 @@ class ApiTestCase(unittest.TestCase):
                 tenant_id=1,
                 username="admin_a",
                 password_hash=hash_password(ADMIN_PASSWORD),
-                role="admin",
+                role="tenant_admin",
                 is_active=True,
             ),
             User(
@@ -151,7 +161,31 @@ class ApiTestCase(unittest.TestCase):
                 tenant_id=2,
                 username="admin_b",
                 password_hash=hash_password(ADMIN_PASSWORD),
-                role="admin",
+                role="tenant_admin",
+                is_active=True,
+            ),
+            User(
+                id=6,
+                tenant_id=1,
+                username="service_a",
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role="customer_service",
+                is_active=True,
+            ),
+            User(
+                id=7,
+                tenant_id=1,
+                username="supervisor_a",
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role="supervisor",
+                is_active=True,
+            ),
+            User(
+                id=8,
+                tenant_id=1,
+                username="developer_a",
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role="developer",
                 is_active=True,
             ),
         ])

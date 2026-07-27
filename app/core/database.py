@@ -55,6 +55,9 @@ def init_db():
     from app.models import (  # noqa: F401
         Tenant, User, Product, Order, Ticket, RefundRequest,
         AgentTrace, AgentTraceStep, UnresolvedCase, ConversationState,
+        ConversationTurn, ConversationSummary, TaskCheckpoint,
+        MemoryRecord, MemoryEvent,
+        AdminAuditEvent,
         KnowledgeDocument, KnowledgeRevision, KnowledgeIndexBuild,
     )
 
@@ -70,9 +73,13 @@ def init_db():
             from scripts.migrate_knowledge_lifecycle import (
                 migrate as migrate_knowledge_lifecycle,
             )
+            from scripts.migrate_memory_system import migrate as migrate_memory
+            from scripts.migrate_staff_roles import migrate as migrate_staff_roles
 
             migrate_ticket(Path(database_path))
             migrate_trace(Path(database_path))
             migrate_unresolved_case(Path(database_path))
             migrate_knowledge_lifecycle(Path(database_path))
+            migrate_memory(Path(database_path))
+            migrate_staff_roles(Path(database_path))
     logger.info("数据库表结构已就绪 - %s", settings.resolved_database_url)

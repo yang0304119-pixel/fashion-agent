@@ -82,11 +82,14 @@ def _run_refund_workflow(state: AgentState) -> dict:
         result["collected_slots"] = collected_slots
         return result
     except (RefundNotFoundError, RefundStateError) as error:
-        result = _error_state(str(error))
+        result = _error_state(str(error), human_required=False)
         result["collected_slots"] = collected_slots
         return result
     except RefundServiceError:
-        result = _error_state("退款申请暂时无法处理，请稍后重试。")
+        result = _error_state(
+            "退款申请暂时无法处理，系统已停止自动执行并转交人工。",
+            human_required=True,
+        )
         result["collected_slots"] = collected_slots
         return result
     finally:
@@ -137,13 +140,14 @@ def _success_state(refund: RefundRequest, *, reused: bool) -> dict:
         )
         tool_status = "error"
 
+    human_required = refund.human_review or refund.status == "failed"
     data = {
         "refund_request_id": refund.id,
         "order_id": refund.order_id,
         "amount": float(refund.amount),
         "status": refund.status,
         "risk_level": refund.risk_level,
-        "human_required": refund.human_review,
+        "human_required": human_required,
         "ticket_id": refund.ticket_id,
         "gateway_mode": refund.gateway_mode,
         "provider_refund_id": refund.provider_refund_id,
@@ -155,20 +159,20 @@ def _success_state(refund: RefundRequest, *, reused: bool) -> dict:
         "tool_result": {"success": True, "data": data, "error": None},
         "tool_status": tool_status,
         "risk_level": refund.risk_level,
-        "human_required": refund.human_review,
+        "human_required": human_required,
         "refund_request_id": refund.id,
         "refund_status": refund.status,
         "final_answer": answer,
     }
 
 
-def _error_state(message: str) -> dict:
+def _error_state(message: str, *, human_required: bool = False) -> dict:
     return {
         "missing_slots": [],
         "tool_result": {"success": False, "data": None, "error": message},
         "tool_status": "error",
         "risk_level": "medium",
-        "human_required": False,
+        "human_required": human_required,
         "final_answer": message,
     }
 

@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     LLM_API_KEY: str
     LLM_API_BASE: str
     LLM_MODEL: str
+    AGENT_LLM_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=120)
+    AGENT_LLM_MAX_RETRIES: int = Field(default=2, ge=0, le=5)
+    TOOL_TRANSIENT_MAX_RETRIES: int = Field(default=2, ge=0, le=5)
+    TOOL_RETRY_BASE_SECONDS: float = Field(default=0.25, ge=0, le=10)
+    TOOL_RETRY_MAX_SECONDS: float = Field(default=2.0, gt=0, le=60)
+    TOOL_CIRCUIT_FAILURE_THRESHOLD: int = Field(default=3, ge=1, le=20)
+    TOOL_CIRCUIT_COOLDOWN_SECONDS: float = Field(default=30.0, gt=0, le=3600)
+    TOOL_MAX_SELF_REPAIRS: int = Field(default=1, ge=0, le=3)
+    AGENT_MAX_ITERATIONS: int = Field(default=5, ge=1, le=20)
+    AGENT_MAX_TOOL_CALLS: int = Field(default=5, ge=1, le=50)
+    AGENT_MAX_EXECUTION_SECONDS: float = Field(default=45.0, gt=1, le=300)
+    AGENT_MAX_LLM_OUTPUT_TOKENS: int = Field(default=1000, ge=100, le=8000)
 
     # ── 身份认证 ──
     # 生产环境必须通过环境变量设置不少于 32 字符的随机密钥。
@@ -51,6 +63,9 @@ class Settings(BaseSettings):
     # 仅用于初始化本地演示账号；生产环境不要配置公共默认密码。
     SEED_CUSTOMER_PASSWORD: str = ""
     SEED_ADMIN_PASSWORD: str = ""
+    SEED_SERVICE_PASSWORD: str = ""
+    SEED_SUPERVISOR_PASSWORD: str = ""
+    SEED_DEVELOPER_PASSWORD: str = ""
 
     # ── Mock 外部电商系统 ──
     # 仅非生产环境使用；模拟外部渠道已识别的固定消费者。
@@ -90,6 +105,18 @@ class Settings(BaseSettings):
         ge=5,
         le=1440,
     )
+
+    # ── 分层记忆与上下文预算 ──
+    MEMORY_RECENT_TURN_LIMIT: int = Field(default=12, ge=2, le=50)
+    MEMORY_CONTEXT_TOKEN_BUDGET: int = Field(default=4000, ge=500, le=32000)
+    MEMORY_COMPACTION_TRIGGER_TOKENS: int = Field(default=6000, ge=1000, le=64000)
+    MEMORY_TURN_TTL_DAYS: int = Field(default=30, ge=1, le=365)
+    MEMORY_SUMMARY_TTL_DAYS: int = Field(default=90, ge=1, le=730)
+    MEMORY_COMPLETED_TASK_TTL_DAYS: int = Field(default=7, ge=1, le=365)
+    MEMORY_LONG_TERM_TOP_K: int = Field(default=5, ge=1, le=20)
+    MEMORY_MIN_WRITE_SCORE: float = Field(default=0.65, ge=0, le=1)
+    MEMORY_SEMANTIC_ENABLED: bool = True
+    MEMORY_DECAY_DAYS: int = Field(default=90, ge=7, le=730)
 
     # ── RAG 配置（占位，Phase 2 启用） ──
     DOCLING_ARTIFACTS_PATH: Path = Path(

@@ -1,0 +1,1216 @@
+{
+  "generated_at": "2026-07-22T11:28:26.225915+00:00",
+  "scope": "current tenant knowledge index; production dense+BM25+RRF retrieval; remote query rewrite disabled; retrieval metrics only, not answer accuracy or production SLA",
+  "tenant_id": 1,
+  "build": {
+    "id": 1,
+    "status": "active",
+    "collection_name": "fashion_knowledge_t1_build_1",
+    "document_count": 11,
+    "chunk_count": 150,
+    "revision_snapshot": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "activated_at": "2026-07-22T09:14:10.566521"
+  },
+  "indexed_chunks": 150,
+  "embedding_model": "F:\\桌面\\fashionagent\\FashionAgent\\models\\bge-small-zh-v1.5",
+  "cases_file": "F:\\桌面\\fashionagent\\FashionAgent\\data\\evaluation\\rag_cases.jsonl",
+  "cases": 31,
+  "metrics": {
+    "recall_at_1": 0.6425,
+    "precision_at_1": 0.9032,
+    "hit_rate_at_1": 0.9032,
+    "recall_at_3": 0.922,
+    "precision_at_3": 0.4839,
+    "hit_rate_at_3": 1.0,
+    "recall_at_5": 0.9839,
+    "precision_at_5": 0.329,
+    "hit_rate_at_5": 1.0,
+    "mrr_at_5": 0.9462
+  },
+  "latency_ms": {
+    "mean": 55.86,
+    "p50": 53.98,
+    "p95": 68.55,
+    "max": 74.64
+  },
+  "errors": 0,
+  "details": [
+    {
+      "id": "RAG-AFTER-001",
+      "query": "七天无理由退货时，商品需要保持什么状态？",
+      "expected_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "三份售后资料均明确要求未穿着、未洗涤、吊牌及包装完整。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 61.48,
+      "metrics": {
+        "recall_at_1": 0.3333,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.6667,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.6,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-002",
+      "query": "定制商品能走七天无理由退货吗？",
+      "expected_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "evidence": "售后退款规则 1.2 与退款与换货政策 1 均将定制商品列为例外。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 49.93,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.5,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-003",
+      "query": "吊牌已经剪掉了，还能无理由退货吗？",
+      "expected_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "三份资料均把吊牌完整或不影响二次销售列为退货条件。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 47.86,
+      "metrics": {
+        "recall_at_1": 0.3333,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.6667,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.6,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-004",
+      "query": "退款金额超过一百元，系统应该如何处理？",
+      "expected_sources": [
+        "售后规则/通用/售后退款规则.md"
+      ],
+      "evidence": "售后退款规则 3.3 明确退款金额大于 100 元需人工审核。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 53.15,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-005",
+      "query": "微信支付的退款一般几个工作日到账？",
+      "expected_sources": [
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "退款换货操作流程第四节列出微信支付 1-3 个工作日到账。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 49.73,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-006",
+      "query": "退货申请被拒绝通常有哪些原因？",
+      "expected_sources": [
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "退款换货操作流程第五节列出超期、已使用洗涤、非本店商品等原因。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/售后退款规则.md",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/售后退款规则.md",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 54.54,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-007",
+      "query": "退货时赠品丢了，退款金额怎么处理？",
+      "expected_sources": [
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "退款换货操作流程第五节说明赠品丢失按赠品价值从退款中扣除。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 55.0,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-008",
+      "query": "质量问题导致退货，来回运费由谁承担？",
+      "expected_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "evidence": "售后资料及物流与配送规则 3.3 均说明质量问题运费由商家承担。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 57.68,
+      "metrics": {
+        "recall_at_1": 0.25,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.75,
+        "precision_at_3": 1.0,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.8,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-AFTER-009",
+      "query": "仓库收到退货后，需要多久完成验货？",
+      "expected_sources": [
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "evidence": "两份资料均给出仓库收货后约 1-2 个工作日完成验收。",
+      "retrieved_chunk_sources": [
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 59.67,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-001",
+      "query": "极寒系列加厚羽绒服填充的是鹅绒还是鸭绒？",
+      "expected_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv"
+      ],
+      "evidence": "商品详解第一节和商品目录的商品 1 均标明 90% 白鹅绒。",
+      "retrieved_chunk_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/商品目录.csv",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/商品目录.csv",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 56.11,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.5,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-002",
+      "query": "哪一款羽绒服最适合商务会议和城市通勤？",
+      "expected_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md"
+      ],
+      "evidence": "商品详解第四节将商务修身羽绒服的场景列为商务会议和城市通勤。",
+      "retrieved_chunk_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 52.98,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-003",
+      "query": "三合一冲锋羽绒服清洗时外壳和内胆要分开吗？",
+      "expected_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md"
+      ],
+      "evidence": "商品详解第三节洗护建议明确外壳与内胆分开洗涤。",
+      "retrieved_chunk_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/商品目录.csv",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/商品目录.csv",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 49.33,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-004",
+      "query": "羽绒服洗完结团、不蓬松，应该怎么恢复？",
+      "expected_sources": [
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "evidence": "羽绒服洗护指南及面料指南羽绒服 FAQ 均说明晾干后轻拍或低温烘干恢复蓬松。",
+      "retrieved_chunk_sources": [
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv"
+      ],
+      "first_relevant_rank": 2,
+      "latency_ms": 51.3,
+      "metrics": {
+        "recall_at_1": 0.0,
+        "precision_at_1": 0.0,
+        "hit_at_1": 0.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 0.5
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-005",
+      "query": "鹅绒和鸭绒相比有什么差别？",
+      "expected_sources": [
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "evidence": "面料种类与洗护指南 2.3 说明鹅绒蓬松度、保暖性和异味方面的差异。",
+      "retrieved_chunk_sources": [
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "first_relevant_rank": 3,
+      "latency_ms": 58.42,
+      "metrics": {
+        "recall_at_1": 0.0,
+        "precision_at_1": 0.0,
+        "hit_at_1": 0.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 0.3333
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-006",
+      "query": "羊毛衣服洗完应该平铺还是悬挂晾干？",
+      "expected_sources": [
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "evidence": "面料种类与洗护指南 3.2 明确羊毛应平铺晾干、不可悬挂。",
+      "retrieved_chunk_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "售后规则/通用/售后退款规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "售后规则/通用/售后退款规则.md"
+      ],
+      "first_relevant_rank": 2,
+      "latency_ms": 53.98,
+      "metrics": {
+        "recall_at_1": 0.0,
+        "precision_at_1": 0.0,
+        "hit_at_1": 0.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 0.5
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-007",
+      "query": "商品编号六的羽绒服充绒量是多少？",
+      "expected_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/商品目录.csv"
+      ],
+      "evidence": "商品详解第六节和商品目录的商品 6 均标明 M 码充绒量 180g。",
+      "retrieved_chunk_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 51.91,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 0.5,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 0.5,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-008",
+      "query": "纯棉衣服第一次洗涤通常会缩水多少？",
+      "expected_sources": [
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "evidence": "面料种类与洗护指南 FAQ 明确纯棉首次洗涤可能缩水 3%-5%。",
+      "retrieved_chunk_sources": [
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 57.85,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-PRODUCT-009",
+      "query": "羽绒服偶尔钻出几根绒算质量问题吗？",
+      "expected_sources": [
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "evidence": "面料指南与服装 FAQ 均说明少量钻绒属于正常现象。",
+      "retrieved_chunk_sources": [
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx"
+      ],
+      "retrieved_unique_sources": [
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 51.71,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-SIZE-001",
+      "query": "男生身高175厘米、体重70公斤，通用上衣推荐什么尺码？",
+      "expected_sources": [
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "evidence": "服装尺码指南速查表及 FAQ 给出 175cm/70kg 推荐 L 码。",
+      "retrieved_chunk_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "retrieved_unique_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 51.7,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-SIZE-002",
+      "query": "宽松版外套一般应该按正常尺码还是小一码购买？",
+      "expected_sources": [
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "evidence": "服装尺码指南 1.2 对宽松版建议可买小一码。",
+      "retrieved_chunk_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 52.25,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-SIZE-003",
+      "query": "用软尺测胸围时应该绕身体哪个位置？",
+      "expected_sources": [
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "evidence": "服装尺码指南 4.2 说明软尺水平绕过胸部最丰满处。",
+      "retrieved_chunk_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 55.08,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-SIZE-004",
+      "query": "尺寸正好介于两个尺码之间，喜欢宽松该怎么选？",
+      "expected_sources": [
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "evidence": "服装尺码指南 4.3 及 FAQ 均建议偏好宽松选大码。",
+      "retrieved_chunk_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "售后规则/通用/售后退款规则.md",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "retrieved_unique_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "售后规则/通用/售后退款规则.md",
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 51.57,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-SIZE-005",
+      "query": "冲锋衣为什么建议选大一码？",
+      "expected_sources": [
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "evidence": "服装尺码指南 3.2 说明冲锋衣外壳偏硬，需要预留内层空间。",
+      "retrieved_chunk_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md"
+      ],
+      "retrieved_unique_sources": [
+        "尺码知识/通用/服装尺码指南.md",
+        "商品知识/男装羽绒服/羽绒服商品详解.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "商品知识/通用/面料种类与洗护指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 51.26,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-001",
+      "query": "现货商品下单后通常多久发货？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "物流规则给出 24-48 小时，配送 FAQ 给出通常 24 小时、大促 48 小时。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 57.84,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-002",
+      "query": "订单金额满多少元普通快递包邮？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md"
+      ],
+      "evidence": "物流与配送规则 3.1 明确满 199 元包邮，偏远地区除外。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 65.97,
+      "metrics": {
+        "recall_at_1": 1.0,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.3333,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-003",
+      "query": "物流信息超过三天没有更新应该怎么办？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "物流规则 4.2 建议超过 3 天联系商家，配送 FAQ 也给出轨迹不更新时联系客服的处理。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "尺码知识/通用/服装尺码指南.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 53.58,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-004",
+      "query": "物流显示已签收但没收到，应该先检查哪些地方？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "两份物流资料均要求先检查快递柜、门卫或家人代收。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "商品知识/男装羽绒服/羽绒服洗护指南.docx"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 47.44,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-005",
+      "query": "订单已经出库后还能修改收货地址吗？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "两份资料均说明出库后不能保证改址，需联系承运商且可能产生转寄费。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款与换货政策.pdf"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 60.8,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-006",
+      "query": "签收时发现包裹外包装严重破损应该如何处理？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "物流规则建议当场验货并可拒签，配送 FAQ 建议拍照并在 24 小时内联系。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/配送与签收FAQ.txt",
+        "物流规则/通用/物流与配送规则.md",
+        "售后规则/通用/售后退款规则.md",
+        "售后规则/通用/退款换货操作流程.md",
+        "商品知识/通用/服装常见问题FAQ.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 74.64,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-007",
+      "query": "偏远地区使用普通快递大约需要多少天？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "两份物流资料均单列偏远地区配送时效，分别给出 7-15 天和 3-7 个工作日。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 65.87,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    },
+    {
+      "id": "RAG-LOGISTICS-008",
+      "query": "物流信息一般在发货后多久能查到？",
+      "expected_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt"
+      ],
+      "evidence": "物流规则 FAQ 给出 2-12 小时，配送 FAQ 给出首次扫描通常 6-24 小时。",
+      "retrieved_chunk_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "retrieved_unique_sources": [
+        "物流规则/通用/物流与配送规则.md",
+        "物流规则/通用/配送与签收FAQ.txt",
+        "商品知识/通用/服装常见问题FAQ.md",
+        "售后规则/通用/退款与换货政策.pdf",
+        "售后规则/通用/退款换货操作流程.md"
+      ],
+      "first_relevant_rank": 1,
+      "latency_ms": 71.13,
+      "metrics": {
+        "recall_at_1": 0.5,
+        "precision_at_1": 1.0,
+        "hit_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "precision_at_3": 0.6667,
+        "hit_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "precision_at_5": 0.4,
+        "hit_at_5": 1.0,
+        "reciprocal_rank_at_5": 1.0
+      },
+      "error": null
+    }
+  ]
+}

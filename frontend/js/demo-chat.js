@@ -1,4 +1,4 @@
-import { readJson, saveSession } from './api.js';
+import { apiFetch, readJson, saveSession } from './api.js';
 import { fillChatMessage, initChat } from './chat.js';
 import { renderLoading, renderMessage } from './message-renderer.js';
 import { initProductPicker } from './product-picker.js';
@@ -19,6 +19,7 @@ async function bootstrap() {
   bindDialogs();
   bindPromptButtons();
   bindClearContext();
+  bindMemoryPanel();
   renderWelcome();
   setControlsDisabled(true);
 
@@ -213,7 +214,7 @@ function setChatBusy(isBusy) {
 
 
 function setControlsDisabled(disabled) {
-  ['openProductPicker', 'openOrderPicker', 'chatInput', 'sendBtn'].forEach((id) => {
+  ['openProductPicker', 'openOrderPicker', 'openMemoryPanel', 'chatInput', 'sendBtn'].forEach((id) => {
     document.getElementById(id).disabled = disabled;
   });
 }
@@ -235,6 +236,88 @@ function bindDialogs() {
       if (event.target === dialog) dialog.close();
     });
   });
+}
+
+
+function bindMemoryPanel() {
+  document.getElementById('openMemoryPanel').addEventListener('click', async () => {
+    document.getElementById('memoryDialog').showModal();
+    await loadMemories();
+  });
+  document.getElementById('refreshMemories').addEventListener('click', loadMemories);
+}
+
+
+async function loadMemories() {
+  const list = document.getElementById('memoryList');
+  list.textContent = '正在读取记忆…';
+  try {
+    const payload = await readJson(await apiFetch('/api/memories'));
+    renderMemories(payload.data || []);
+  } catch (error) {
+    list.textContent = error.message || '读取记忆失败。';
+  }
+}
+
+
+function renderMemories(memories) {
+  const list = document.getElementById('memoryList');
+  list.replaceChildren();
+  if (!memories.length) {
+    list.textContent = '目前没有长期记忆。你可以在对话中明确表达“我更喜欢宽松版型”。';
+    return;
+  }
+  memories.forEach((memory) => {
+    const card = document.createElement('article');
+    card.className = 'memory-card';
+    const text = document.createElement('div');
+    text.append(
+      label('small', memory.memory_type),
+      label('strong', memory.content?.label || memory.subject_key),
+      label('span', memory.content?.value || JSON.stringify(memory.content)),
+    );
+    const actions = document.createElement('div');
+    const edit = label('button', '修改');
+    edit.type = 'button';
+    edit.addEventListener('click', () => editMemory(memory));
+    const remove = label('button', '删除');
+    remove.type = 'button';
+    remove.className = 'danger-memory-action';
+    remove.addEventListener('click', () => deleteMemory(memory.id));
+    actions.append(edit, remove);
+    card.append(text, actions);
+    list.appendChild(card);
+  });
+}
+
+
+async function editMemory(memory) {
+  const current = memory.content?.value || '';
+  const value = window.prompt('修改记忆内容', current);
+  if (value === null || !value.trim()) return;
+  try {
+    await readJson(await apiFetch(`/api/memories/${memory.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: { ...memory.content, value: value.trim() } }),
+    }));
+    showToast('记忆已更新。');
+    await loadMemories();
+  } catch (error) {
+    showToast(error.message || '修改记忆失败。');
+  }
+}
+
+
+async function deleteMemory(memoryId) {
+  if (!window.confirm('确定删除这条长期记忆吗？')) return;
+  try {
+    await readJson(await apiFetch(`/api/memories/${memoryId}`, { method: 'DELETE' }));
+    showToast('记忆已删除。');
+    await loadMemories();
+  } catch (error) {
+    showToast(error.message || '删除记忆失败。');
+  }
 }
 
 

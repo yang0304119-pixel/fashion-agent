@@ -38,7 +38,10 @@ USERS = [
     {"id": 1, "tenant_id": 1, "username": "张三", "role": "customer"},
     {"id": 2, "tenant_id": 1, "username": "李四", "role": "customer"},
     {"id": 3, "tenant_id": 1, "username": "王五", "role": "customer"},
-    {"id": 4, "tenant_id": 1, "username": "admin", "role": "admin"},
+    {"id": 4, "tenant_id": 1, "username": "admin", "role": "tenant_admin"},
+    {"id": 5, "tenant_id": 1, "username": "service_demo", "role": "customer_service"},
+    {"id": 6, "tenant_id": 1, "username": "supervisor_demo", "role": "supervisor"},
+    {"id": 7, "tenant_id": 1, "username": "developer_demo", "role": "developer"},
 ]
 
 # tenant_id=1 关联到默认测试店铺
@@ -182,11 +185,16 @@ def seed_database():
 
         print("[INFO] 正在插入用户数据...")
         for user_data in USERS:
-            password = (
-                settings.SEED_ADMIN_PASSWORD
-                if user_data["role"] == "admin"
-                else settings.SEED_CUSTOMER_PASSWORD
-            )
+            password_by_role = {
+                "customer": settings.SEED_CUSTOMER_PASSWORD,
+                "customer_service": settings.SEED_SERVICE_PASSWORD,
+                "supervisor": settings.SEED_SUPERVISOR_PASSWORD,
+                "tenant_admin": settings.SEED_ADMIN_PASSWORD,
+                "developer": settings.SEED_DEVELOPER_PASSWORD,
+            }
+            password = password_by_role[user_data["role"]]
+            if not password:
+                raise RuntimeError(f"缺少{user_data['role']}演示账号密码配置")
             db.add(
                 User(
                     **user_data,

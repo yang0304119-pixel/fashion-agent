@@ -2,7 +2,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from app.integrations.refund_gateway import GatewayRefundResult
-from app.models import Order, RefundRequest, Ticket
+from app.models import AgentTrace, Order, RefundRequest, Ticket
 from tests.api_test_support import (
     ADMIN_PASSWORD,
     CUSTOMER_PASSWORD,
@@ -141,6 +141,36 @@ class RefundFlowApiTests(ApiTestCase):
         db = self.Session()
         refund = db.query(RefundRequest).filter_by(order_id=10007).one()
         self.assertEqual(refund.status, "approved")
+        self.assertEqual(db.get(Order, 10007).status, "pending")
+        db.close()
+
+    def test_failed_gateway_saves_state_and_creates_human_ticket(self):
+        gateway = CountingGateway("failed")
+        headers = self.customer_headers()
+        with patch(
+            "app.services.refund_service.get_refund_gateway",
+            return_value=gateway,
+        ):
+            response = self.post_chat(
+                session_id="failed-gateway-handoff-session",
+                message="订单10007申请退款，原因是不需要了",
+                headers=headers,
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        db = self.Session()
+        refund = db.query(RefundRequest).filter_by(order_id=10007).one()
+        ticket = db.get(Ticket, refund.ticket_id)
+        trace = db.query(AgentTrace).filter_by(
+            session_id="failed-gateway-handoff-session"
+        ).one()
+        self.assertEqual(refund.status, "failed")
+        self.assertTrue(refund.human_review)
+        self.assertEqual(refund.risk_level, "high")
+        self.assertIsNotNone(ticket)
+        self.assertEqual(ticket.type, "refund_exception")
+        self.assertEqual(ticket.status, "pending")
+        self.assertTrue(trace.human_required)
         self.assertEqual(db.get(Order, 10007).status, "pending")
         db.close()
 

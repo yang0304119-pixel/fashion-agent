@@ -4,7 +4,7 @@ FastAPI 依赖注入
 集中管理跨路由的共享依赖，当前提供数据库会话注入。
 """
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.security import TokenError, decode_access_token
 from app.models.user import User
+from app.core.permissions import STAFF_ROLES, permissions_for_role
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -56,10 +57,27 @@ def get_current_user(
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """限制接口只能由当前租户的管理员访问。"""
-    if current_user.role != "admin":
+    """兼容旧调用；新代码应使用require_permission。"""
+    if "tenant.settings" not in permissions_for_role(current_user.role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限",
         )
     return current_user
+
+
+def require_staff(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in STAFF_ROLES and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要商家员工权限")
+    return current_user
+
+
+def require_permission(permission: str) -> Callable:
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if permission not in permissions_for_role(current_user.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="当前账号没有执行该操作的权限",
+            )
+        return current_user
+    return dependency

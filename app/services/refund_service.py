@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.integrations.refund_gateway import RefundGateway, get_refund_gateway
 from app.models.order import Order
 from app.models.refund_request import RefundRequest
+from app.models.tenant import Tenant
 from app.models.ticket import Ticket
 from app.services.order_service import OrderNotFoundError, OrderService
 
@@ -95,7 +96,7 @@ class RefundService:
             raise RefundStateError("当前订单状态不支持退款")
 
         amount = Decimal(str(order.total_price))
-        high_risk = amount > settings.REFUND_AUTO_LIMIT
+        high_risk = amount > self._refund_auto_limit(tenant_id)
         try:
             gateway = self._get_gateway()
         except RuntimeError as error:
@@ -292,6 +293,7 @@ class RefundService:
             )
             refund.status = "failed"
             refund.failure_reason = "退款渠道调用异常"
+            self._create_failure_ticket(refund, order)
             return
 
         if result.status == "succeeded":
@@ -305,6 +307,32 @@ class RefundService:
         else:
             refund.status = "failed"
             refund.failure_reason = result.error or "退款渠道处理失败"
+            self._create_failure_ticket(refund, order)
+
+    def _create_failure_ticket(
+        self,
+        refund: RefundRequest,
+        order: Order,
+    ) -> None:
+        """渠道失败后保存状态并创建人工处理工单，禁止自动重复扣打渠道。"""
+        if refund.ticket_id is not None:
+            return
+        ticket = Ticket(
+            tenant_id=refund.tenant_id,
+            order_id=order.id,
+            user_id=refund.user_id,
+            type="refund_exception",
+            reason=f"退款渠道失败：{refund.failure_reason or '未知原因'}",
+            amount=refund.amount,
+            risk_level="high",
+            status="pending",
+            human_review=True,
+        )
+        self.db.add(ticket)
+        self.db.flush()
+        refund.ticket_id = ticket.id
+        refund.risk_level = "high"
+        refund.human_review = True
 
     def _find_by_idempotency(
         self,
@@ -315,6 +343,14 @@ class RefundService:
             RefundRequest.tenant_id == tenant_id,
             RefundRequest.idempotency_key == idempotency_key,
         ).first()
+
+    def _refund_auto_limit(self, tenant_id: int) -> Decimal:
+        tenant = self.db.get(Tenant, tenant_id)
+        configured = (tenant.theme_config or {}).get("refund_auto_limit") if tenant else None
+        try:
+            return Decimal(str(configured)) if configured is not None else settings.REFUND_AUTO_LIMIT
+        except Exception:
+            return settings.REFUND_AUTO_LIMIT
 
     def _get_gateway(self) -> RefundGateway:
         if self.gateway is None:

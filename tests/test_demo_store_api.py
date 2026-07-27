@@ -16,6 +16,9 @@ class DemoStoreApiTests(ApiTestCase):
             settings.DEMO_STORE_TENANT_ID,
         )
         self.assertEqual(payload["user"]["role"], "customer")
+        self.assertEqual(payload["user"]["permissions"], [])
+        self.assertEqual(payload["user"]["home_view"], "workbench")
+        self.assertTrue(payload["user"]["role_label"])
 
         orders = self.client.get(
             "/api/orders",

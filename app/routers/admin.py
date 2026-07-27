@@ -1,9 +1,9 @@
 """管理员专用查询接口；所有数据仍受当前租户边界约束。"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, joinedload
 
-from app.dependencies import get_db, require_admin
+from app.dependencies import get_db, require_permission
 from app.models.agent_trace import AgentTrace
 from app.models.order import Order
 from app.models.refund_request import RefundRequest
@@ -29,6 +29,10 @@ from app.schemas.admin import (
     AdminTraceError,
     AdminTraceSessionResponse,
     AdminTraceStepData,
+    BusinessQualityDetail,
+    BusinessQualityReportData,
+    BusinessQualityReportResponse,
+    BusinessQualitySummary,
     AdminUnresolvedCaseListItem,
     AdminUnresolvedCaseListResponse,
     AdminUnresolvedCaseResponse,
@@ -62,6 +66,7 @@ from app.services.unresolved_case_service import (
     UnresolvedCaseService,
     UnresolvedCaseValidationError,
 )
+from app.services.admin_audit_service import AdminAuditService
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -70,7 +75,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 def get_tenant_dashboard(
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("workbench.read")),
 ) -> AdminDashboardResponse:
     summary = AdminQueryService(db).get_dashboard(
         tenant_id=admin.tenant_id,
@@ -91,6 +96,38 @@ def get_tenant_dashboard(
     )
 
 
+@router.get("/quality-report", response_model=BusinessQualityReportResponse)
+def get_business_quality_report(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    operator: User = Depends(require_permission("quality.business.read")),
+) -> BusinessQualityReportResponse:
+    query = db.query(AgentTrace).filter(AgentTrace.tenant_id == operator.tenant_id)
+    total = query.count()
+    human_handoffs = query.filter(AgentTrace.human_required.is_(True)).count()
+    failed = query.filter(AgentTrace.status == "failed").count()
+    resolved = query.filter(
+        AgentTrace.human_required.is_(False),
+        AgentTrace.status.in_(("completed", "succeeded", "success")),
+        AgentTrace.final_answer.is_not(None),
+    ).count()
+    rows = (
+        query.order_by(AgentTrace.created_at.desc(), AgentTrace.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return BusinessQualityReportResponse(
+        data=BusinessQualityReportData(
+            summary=BusinessQualitySummary(
+                total_requests=total,
+                resolved_requests=resolved,
+                human_handoffs=human_handoffs,
+                failed_requests=failed,
+                automatic_resolution_rate=round((resolved / total * 100), 1) if total else 0.0,
+            ),
+            cases=[_to_business_quality_detail(row) for row in rows],
+        )
+    )
 @router.get("/refunds", response_model=RefundListResponse)
 def list_tenant_refunds(
     status_filter: str | None = Query(
@@ -101,7 +138,7 @@ def list_tenant_refunds(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("refund.review")),
 ) -> RefundListResponse:
     result = RefundQueryService(db).list_for_tenant(
         tenant_id=admin.tenant_id,
@@ -124,7 +161,7 @@ def list_tenant_refunds(
 def get_tenant_refund(
     refund_request_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("refund.review")),
 ) -> RefundResponse:
     refund = (
         db.query(RefundRequest)
@@ -149,8 +186,9 @@ def get_tenant_refund(
 )
 def approve_refund(
     refund_request_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("refund.review")),
 ) -> RefundResponse:
     try:
         outcome = RefundService(db).approve(
@@ -164,6 +202,15 @@ def approve_refund(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except RefundServiceError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="refund.approved",
+        target_type="refund_request",
+        target_id=refund_request_id,
+        after_data={"status": outcome.refund.status, "reviewed_by": admin.id},
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return RefundResponse(
         data=to_refund_data(outcome.refund, include_user=True)
     )
@@ -175,15 +222,16 @@ def approve_refund(
 )
 def reject_refund(
     refund_request_id: int,
-    request: RefundDecisionRequest,
+    payload: RefundDecisionRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("refund.review")),
 ) -> RefundResponse:
     try:
         outcome = RefundService(db).reject(
             tenant_id=admin.tenant_id,
             refund_request_id=refund_request_id,
-            reason=request.reason,
+            reason=payload.reason,
             reviewed_by=admin.id,
         )
     except RefundNotFoundError as error:
@@ -192,6 +240,16 @@ def reject_refund(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except RefundServiceError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="refund.rejected",
+        target_type="refund_request",
+        target_id=refund_request_id,
+        after_data={"status": outcome.refund.status, "reviewed_by": admin.id},
+        reason=payload.reason,
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return RefundResponse(
         data=to_refund_data(outcome.refund, include_user=True)
     )
@@ -207,7 +265,7 @@ def list_tenant_orders(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("order.read")),
 ) -> AdminOrderListResponse:
     result = AdminQueryService(db).list_orders(
         tenant_id=admin.tenant_id,
@@ -242,7 +300,7 @@ def list_tenant_orders(
 def get_tenant_order(
     order_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("order.read")),
 ) -> AdminOrderDetailResponse:
     try:
         item = AdminQueryService(db).get_order(
@@ -301,7 +359,7 @@ def list_tenant_tickets(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("ticket.read")),
 ) -> AdminTicketListResponse:
     result = AdminQueryService(db).list_tickets(
         tenant_id=admin.tenant_id,
@@ -325,7 +383,7 @@ def list_tenant_tickets(
 def get_tenant_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("ticket.read")),
 ):
     try:
         item = AdminQueryService(db).get_ticket(
@@ -335,74 +393,6 @@ def get_tenant_ticket(
     except AdminTicketNotFoundError as error:
         raise HTTPException(status_code=404, detail="工单不存在") from error
     return AdminTicketDetailResponse(data=_to_admin_ticket(item))
-
-
-@router.get("/traces", response_model=AdminTraceListResponse)
-def list_tenant_traces(
-    session_id: str | None = Query(default=None, max_length=50),
-    intent: str | None = Query(default=None, max_length=50),
-    status_filter: str | None = Query(
-        default=None,
-        alias="status",
-        pattern=r"^(running|succeeded|pending|failed)$",
-    ),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
-) -> AdminTraceListResponse:
-    result = AdminQueryService(db).list_traces(
-        tenant_id=admin.tenant_id,
-        session_id=session_id,
-        intent=intent,
-        status=status_filter,
-        page=page,
-        page_size=page_size,
-    )
-    return AdminTraceListResponse(
-        data=[
-            _to_admin_trace(trace)
-            for trace in result.items
-        ],
-        total=result.total,
-        page=result.page,
-        page_size=result.page_size,
-    )
-
-
-@router.get("/traces/{trace_id}", response_model=AdminTraceDetailResponse)
-def get_tenant_trace(
-    trace_id: int,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
-) -> AdminTraceDetailResponse:
-    try:
-        trace = AdminQueryService(db).get_trace(
-            tenant_id=admin.tenant_id,
-            trace_id=trace_id,
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail="Trace不存在") from error
-    return AdminTraceDetailResponse(data=_to_admin_trace_detail(trace))
-
-
-@router.get(
-    "/trace-sessions/{session_id}",
-    response_model=AdminTraceSessionResponse,
-)
-def get_tenant_trace_session(
-    session_id: str,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
-) -> AdminTraceSessionResponse:
-    traces = AdminQueryService(db).list_trace_session(
-        tenant_id=admin.tenant_id,
-        session_id=session_id,
-    )
-    return AdminTraceSessionResponse(
-        session_id=session_id,
-        data=[_to_admin_trace(trace) for trace in traces],
-    )
 
 
 @router.get(
@@ -416,7 +406,7 @@ def list_tenant_unresolved_cases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("case.handle")),
 ) -> AdminUnresolvedCaseListResponse:
     result = UnresolvedCaseService(db).list_for_tenant(
         tenant_id=admin.tenant_id,
@@ -443,7 +433,7 @@ def list_tenant_unresolved_cases(
 )
 def get_tenant_unresolved_case_stats(
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("case.handle")),
 ) -> AdminUnresolvedCaseStatsResponse:
     stats = UnresolvedCaseService(db).stats_for_tenant(
         tenant_id=admin.tenant_id,
@@ -464,7 +454,7 @@ def get_tenant_unresolved_case_stats(
 def get_tenant_unresolved_case(
     case_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("case.handle")),
 ) -> AdminUnresolvedCaseResponse:
     try:
         item = UnresolvedCaseService(db).get_for_tenant(
@@ -484,7 +474,7 @@ def update_tenant_unresolved_case(
     case_id: int,
     request: UnresolvedCaseUpdateRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("case.handle")),
 ) -> AdminUnresolvedCaseResponse:
     try:
         item = UnresolvedCaseService(db).update_annotation(
@@ -509,7 +499,7 @@ def create_knowledge_draft_from_case(
     case_id: int,
     request: KnowledgeDraftCreateRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeDraftCreateResponse:
     try:
         item, document_id, revision_id = UnresolvedCaseService(db).create_faq_draft(
@@ -586,6 +576,53 @@ def _to_admin_unresolved_case(item) -> AdminUnresolvedCaseListItem:
     )
 
 
+def _to_business_quality_detail(trace: AgentTrace) -> BusinessQualityDetail:
+    input_data = trace.input if isinstance(trace.input, dict) else {}
+    successful = trace.status in {"completed", "succeeded", "success"}
+    resolved = bool(successful and trace.final_answer and not trace.human_required)
+    if trace.human_required:
+        issue = "该问题已转人工处理"
+        action = "进入人工处理工作区并补充处理结论"
+    elif trace.status == "failed" or trace.error_message:
+        issue = "AI处理失败，未形成可靠业务结果"
+        action = "检查业务数据后由人工回复用户"
+    elif trace.intent in {None, "fallback"}:
+        issue = "未识别到可稳定处理的业务意图"
+        action = "标注意图，并评估是否补充知识库"
+    elif not trace.final_answer:
+        issue = "未生成有效回复"
+        action = "由人工补充回复并记录未解决原因"
+    else:
+        issue = None
+        action = "抽样复核回答与引用资料是否一致"
+
+    citations = []
+    for source in list(trace.rag_sources or []):
+        if not isinstance(source, dict):
+            continue
+        safe_source = {
+            key: source[key]
+            for key in ("title", "source", "filename", "citation", "preview")
+            if source.get(key) is not None
+        }
+        if safe_source:
+            citations.append(safe_source)
+
+    return BusinessQualityDetail(
+        trace_id=trace.id,
+        session_id=trace.session_id,
+        user_question=trace.message or input_data.get("message"),
+        ai_answer=trace.final_answer,
+        intent=trace.intent,
+        resolved=resolved,
+        transferred_to_human=bool(trace.human_required),
+        business_issue=issue,
+        citations=citations,
+        suggested_action=action,
+        created_at=trace.created_at,
+    )
+
+
 def _to_admin_trace(trace: AgentTrace) -> AdminTraceListItem:
     return AdminTraceListItem(
         id=trace.id,
@@ -630,6 +667,13 @@ def _to_admin_trace_detail(trace: AgentTrace) -> AdminTraceDetailData:
                 status=step.status,
                 missing_slots=list(step.missing_slots or []),
                 tool_name=step.tool_name,
+                attempt=step.attempt,
+                input=step.input,
+                output=step.output,
+                error_category=step.error_category,
+                retryable=step.retryable,
+                recovery_action=step.recovery_action,
+                retry_delay_ms=step.retry_delay_ms,
                 rag_sources=list(step.rag_sources or []),
                 error=_trace_error(
                     step.error_stage,

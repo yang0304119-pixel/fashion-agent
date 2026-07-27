@@ -10,6 +10,7 @@ try:
     from app.services.trace_service import (
         create_request_trace,
         finalize_request_trace,
+        record_tool_call_attempts,
         traced_node,
     )
 except ModuleNotFoundError as error:
@@ -134,6 +135,57 @@ class TraceStepTests(unittest.TestCase):
         self.assertEqual(trace.error_stage, "order_query")
         self.assertEqual(steps[0].status, "failed")
         self.assertEqual(steps[0].error_message, "订单不存在")
+        self.assertEqual(steps[1].status, "succeeded")
+        db.close()
+
+    def test_records_each_tool_attempt_and_recovery_action(self):
+        trace_id = create_request_trace(
+            tenant_id=1,
+            user_id=1,
+            session_id="session-tool-attempts",
+            message="查询订单",
+        )
+        record_tool_call_attempts(
+            trace_id=trace_id,
+            tool_name="query_order",
+            attempts=[
+                {
+                    "attempt": 1,
+                    "status": "failed",
+                    "input": {},
+                    "output": {"success": False},
+                    "duration_ms": 4,
+                    "error": {
+                        "category": "validation",
+                        "code": "invalid_tool_arguments",
+                        "message": "缺少order_id",
+                        "retryable": True,
+                    },
+                    "recovery_action": "reflect",
+                    "retry_delay_seconds": None,
+                },
+                {
+                    "attempt": 2,
+                    "status": "succeeded",
+                    "input": {"order_id": 10001},
+                    "output": {"success": True},
+                    "duration_ms": 6,
+                    "error": None,
+                    "recovery_action": "completed",
+                    "retry_delay_seconds": None,
+                },
+            ],
+        )
+
+        db = self.Session()
+        steps = db.query(AgentTraceStep).order_by(AgentTraceStep.sequence).all()
+        self.assertEqual(len(steps), 2)
+        self.assertEqual(steps[0].tool_name, "query_order")
+        self.assertEqual(steps[0].attempt, 1)
+        self.assertEqual(steps[0].error_category, "validation")
+        self.assertTrue(steps[0].retryable)
+        self.assertEqual(steps[0].recovery_action, "reflect")
+        self.assertEqual(steps[1].input["order_id"], 10001)
         self.assertEqual(steps[1].status, "succeeded")
         db.close()
 

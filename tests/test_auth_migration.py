@@ -47,7 +47,7 @@ class AuthMigrationTests(unittest.TestCase):
             self.assertEqual([user[0] for user in users], ["admin", "张三"])
             admin = users[0]
             customer = users[1]
-            self.assertEqual(admin[1:], (1, admin[2], "admin"))
+            self.assertEqual(admin[1:], (1, admin[2], "tenant_admin"))
             self.assertEqual(customer[1:], (1, customer[2], "customer"))
             self.assertTrue(verify_password("AdminPassword123!", admin[2]))
             self.assertTrue(

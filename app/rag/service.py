@@ -1,5 +1,6 @@
-import re
 import json
+import re
+from typing import Any
 
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
@@ -166,6 +167,8 @@ def answer_question(
     tenant_id: int,
     build_id: int | None = None,
     top_k: int = 3,
+    recent_turns: list[dict[str, Any]] | None = None,
+    conversation_summary: dict[str, Any] | None = None,
 ) -> dict:
     question = question.strip()
 
@@ -180,12 +183,16 @@ def answer_question(
             "requires_tool": True,
         }
 
-    documents = retrieve(
-        question,
-        tenant_id=tenant_id,
-        build_id=build_id,
-        top_k=top_k,
-    )
+    retrieve_options: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "build_id": build_id,
+        "top_k": top_k,
+    }
+    if recent_turns:
+        retrieve_options["recent_turns"] = recent_turns
+    if conversation_summary:
+        retrieve_options["conversation_summary"] = conversation_summary
+    documents = retrieve(question, **retrieve_options)
 
     return answer_from_documents(
         question,

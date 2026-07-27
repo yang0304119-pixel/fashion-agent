@@ -4,7 +4,7 @@
 存储客服系统用户基础信息。
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -13,6 +13,9 @@ from app.core.database import Base
 
 class User(Base):
     __tablename__ = "user"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "username", name="uq_user_tenant_username"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(
@@ -22,13 +25,13 @@ class User(Base):
         index=True,
         comment="所属租户 ID",
     )
-    username = Column(String(50), unique=True, nullable=False, comment="用户昵称")
+    username = Column(String(50), nullable=False, comment="租户内唯一登录名")
     password_hash = Column(String(255), nullable=False, comment="PBKDF2密码哈希")
     role = Column(
-        String(20),
+        String(50),
         nullable=False,
         default="customer",
-        comment="角色：customer/admin",
+        comment="角色：customer/customer_service/supervisor/tenant_admin/developer",
     )
     is_active = Column(Boolean, nullable=False, default=True, comment="账号是否启用")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="注册时间")

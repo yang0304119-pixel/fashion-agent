@@ -21,7 +21,7 @@ try:
         UnresolvedCase,
         User,
     )
-    from app.routers import admin, orders, refunds, tickets
+    from app.routers import admin, agentops, orders, refunds, tickets
 except ModuleNotFoundError as error:
     if error.name in {"fastapi", "httpx", "sqlalchemy", "pydantic_settings"}:
         raise unittest.SkipTest(f"当前解释器未安装项目依赖 {error.name}")
@@ -44,6 +44,7 @@ class ListApiTests(unittest.TestCase):
         api.include_router(tickets.router, prefix="/api")
         api.include_router(refunds.router, prefix="/api")
         api.include_router(admin.router, prefix="/api")
+        api.include_router(agentops.router, prefix="/api")
 
         def override_db():
             yield self.session
@@ -338,7 +339,7 @@ class ListApiTests(unittest.TestCase):
         for path in (
             "/api/admin/orders",
             "/api/admin/tickets",
-            "/api/admin/traces",
+            "/api/agentops/traces",
             "/api/admin/unresolved-cases",
             "/api/admin/refunds",
         ):
@@ -350,7 +351,7 @@ class ListApiTests(unittest.TestCase):
         expected_ids = {
             "/api/admin/orders": {10001, 10002},
             "/api/admin/tickets": {1, 2},
-            "/api/admin/traces": {1},
+            "/api/agentops/traces": {1},
             "/api/admin/unresolved-cases": {1},
             "/api/admin/refunds": {1, 2},
         }
@@ -502,7 +503,7 @@ class ListApiTests(unittest.TestCase):
         self.session.commit()
 
         response = self.client.get(
-            "/api/admin/traces",
+            "/api/agentops/traces",
             params={
                 "session_id": "tenant-one",
                 "intent": "order_query",
@@ -513,19 +514,19 @@ class ListApiTests(unittest.TestCase):
         self.assertEqual(response.json()["total"], 1)
         self.assertEqual(response.json()["data"][0]["workflow_name"], "order_workflow")
 
-        detail = self.client.get("/api/admin/traces/1")
+        detail = self.client.get("/api/agentops/traces/1")
         self.assertEqual(detail.status_code, 200)
         payload = detail.json()["data"]
         self.assertEqual(payload["message"], "查询订单10001")
         self.assertEqual(payload["steps"][0]["node_name"], "router")
         self.assertEqual(payload["steps"][0]["duration_ms"], 12)
 
-        session = self.client.get("/api/admin/trace-sessions/tenant-one")
+        session = self.client.get("/api/agentops/trace-sessions/tenant-one")
         self.assertEqual(session.status_code, 200)
         self.assertEqual([item["id"] for item in session.json()["data"]], [1])
-        cross_tenant = self.client.get("/api/admin/traces/2")
+        cross_tenant = self.client.get("/api/agentops/traces/2")
         self.assertEqual(cross_tenant.status_code, 404)
-        hidden_session = self.client.get("/api/admin/trace-sessions/tenant-two")
+        hidden_session = self.client.get("/api/agentops/trace-sessions/tenant-two")
         self.assertEqual(hidden_session.status_code, 200)
         self.assertEqual(hidden_session.json()["data"], [])
 

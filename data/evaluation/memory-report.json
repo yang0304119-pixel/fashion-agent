@@ -1,0 +1,98 @@
+{
+  "cases": 8,
+  "metrics": {
+    "write_extraction_accuracy": 1.0,
+    "unsafe_write_block_rate": 1.0,
+    "retrieval_hit_at_k": 1.0,
+    "tenant_isolation_pass_rate": 1.0,
+    "context_budget_pass_rate": 1.0,
+    "task_resume_success_rate": 1.0
+  },
+  "details": [
+    {
+      "id": "MEM-EXT-001",
+      "kind": "extraction",
+      "passed": true,
+      "evidence": {
+        "expected": [
+          "clothing.fit_preference"
+        ],
+        "actual": [
+          "clothing.fit_preference"
+        ]
+      }
+    },
+    {
+      "id": "MEM-EXT-002",
+      "kind": "extraction",
+      "passed": true,
+      "evidence": {
+        "expected": [
+          "clothing.usual_size"
+        ],
+        "actual": [
+          "clothing.usual_size"
+        ]
+      }
+    },
+    {
+      "id": "MEM-BLOCK-001",
+      "kind": "block",
+      "passed": true,
+      "evidence": {
+        "expected": [],
+        "actual": []
+      }
+    },
+    {
+      "id": "MEM-BLOCK-002",
+      "kind": "block",
+      "passed": true,
+      "evidence": {
+        "expected": [],
+        "actual": []
+      }
+    },
+    {
+      "id": "MEM-RET-001",
+      "kind": "retrieval",
+      "passed": true,
+      "evidence": {
+        "expected": "api.rate_limit",
+        "actual": [
+          "api.rate_limit",
+          "api.timeout"
+        ]
+      }
+    },
+    {
+      "id": "MEM-ISO-001",
+      "kind": "tenant_isolation",
+      "passed": true,
+      "evidence": {
+        "expected": null,
+        "actual": []
+      }
+    },
+    {
+      "id": "MEM-BUDGET-001",
+      "kind": "context_budget",
+      "passed": true,
+      "evidence": {
+        "maximum": 120,
+        "used": 76,
+        "remaining": 44
+      }
+    },
+    {
+      "id": "MEM-TASK-001",
+      "kind": "task_resume",
+      "passed": true,
+      "evidence": {
+        "actual": [
+          "order_id"
+        ]
+      }
+    }
+  ]
+}

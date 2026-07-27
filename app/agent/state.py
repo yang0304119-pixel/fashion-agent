@@ -46,6 +46,28 @@ class AgentState(TypedDict):
     collected_slots: dict       # 当前会话已经收集并验证的槽位
     chat_context: dict[str, Any] | None  # 服务端重新查询后的可信卡片上下文
 
+    # ── 分层记忆与上下文工程 ──
+    recent_turns: list[dict[str, Any]]
+    conversation_summary: dict[str, Any] | None
+    task_checkpoint: dict[str, Any] | None
+    retrieved_memories: list[dict[str, Any]]
+    memory_candidates: list[dict[str, Any]]
+    memory_write_results: list[dict[str, Any]]
+    memory_context: dict[str, Any]
+    context_token_budget: dict[str, int]
+
+    # ── 四层安全边界 ──
+    boundary_status: str
+    boundary_action_class: str
+    boundary_risk_level: str
+    boundary_reason: str
+    boundary_original_intent: str
+    approval_required: bool
+    handoff_case_id: int | None
+    execution_started_at: str
+    execution_deadline_at: str
+    execution_budget: dict[str, int | float]
+
     # ── RAG 检索结果（Phase 2） ──
     retrieved_docs: list[str]
     retrieved_doc_ids: list[str]
@@ -58,6 +80,7 @@ class AgentState(TypedDict):
     # ── 工具调用（Phase 4） ──
     tool_result: dict | None          # 工具返回的结构化数据
     tool_status: str                  # success / error / pending
+    tool_attempts: list[dict[str, Any]]  # 每次调用、失败分类、恢复动作和耗时
 
     # ── 退款流程（Phase 5） ──
     risk_level: str                   # low / medium / high

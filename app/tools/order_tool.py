@@ -14,8 +14,14 @@
 # ─────────────────────────────
 """
 
+import logging
+
 from app.providers.factory import get_order_provider
 from app.providers.order_provider import OrderNotFoundError, OrderProvider
+from app.tools.executor import ToolErrorCategory, ToolErrorDetail, failure_result
+
+
+logger = logging.getLogger(__name__)
 
 
 def query_order(
@@ -61,14 +67,17 @@ def query_order(
         }
 
     except OrderNotFoundError as error:
-        return {
-            "success": False,
-            "data": None,
-            "error": str(error),
-        }
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.BUSINESS,
+            code="order_not_found",
+            message=str(error),
+            correction_hint="请核对订单号；不要重复查询同一个无效订单号",
+        ))
     except Exception:
-        return {
-            "success": False,
-            "data": None,
-            "error": "订单查询暂时失败，请稍后重试",
-        }
+        logger.exception("订单工具调用Provider失败")
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.TRANSIENT,
+            code="order_provider_unavailable",
+            message="订单查询暂时失败，请稍后重试",
+            retryable=True,
+        ))

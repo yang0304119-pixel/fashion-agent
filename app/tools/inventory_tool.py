@@ -11,8 +11,14 @@
 # ─────────────────────────────
 """
 
+import logging
+
 from app.providers.factory import get_inventory_provider
 from app.providers.inventory_provider import InventoryNotFoundError, InventoryProvider
+from app.tools.executor import ToolErrorCategory, ToolErrorDetail, failure_result
+
+
+logger = logging.getLogger(__name__)
 
 
 def query_inventory(
@@ -55,14 +61,17 @@ def query_inventory(
         }
 
     except InventoryNotFoundError as error:
-        return {
-            "success": False,
-            "data": None,
-            "error": str(error),
-        }
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.BUSINESS,
+            code="inventory_not_found",
+            message=str(error),
+            correction_hint="先使用 search_products 获取当前租户内的有效商品ID",
+        ))
     except Exception:
-        return {
-            "success": False,
-            "data": None,
-            "error": "库存查询暂时失败，请稍后重试",
-        }
+        logger.exception("库存工具调用Provider失败")
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.TRANSIENT,
+            code="inventory_provider_unavailable",
+            message="库存查询暂时失败，请稍后重试",
+            retryable=True,
+        ))

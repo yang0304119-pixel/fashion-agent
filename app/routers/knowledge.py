@@ -1,9 +1,9 @@
 """AI 客服运营台知识文档生命周期接口。"""
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db, require_admin
+from app.dependencies import get_db, require_permission
 from app.models.knowledge_document import KnowledgeDocument, KnowledgeRevision
 from app.models.user import User
 from app.schemas.knowledge import (
@@ -44,6 +44,7 @@ from app.services.knowledge_index_service import (
     KnowledgeIndexStateError,
 )
 from app.services.knowledge_test_service import KnowledgeTestService
+from app.services.admin_audit_service import AdminAuditService
 from app.rag.errors import RagError
 
 
@@ -57,7 +58,7 @@ router = APIRouter(prefix="/admin/knowledge", tags=["admin-knowledge"])
 def test_knowledge_question(
     request: KnowledgeQuestionTestRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.test")),
 ) -> KnowledgeQuestionTestResponse:
     try:
         result = KnowledgeTestService(db).test_question(
@@ -101,7 +102,7 @@ def list_knowledge_index_builds(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.test")),
 ) -> KnowledgeIndexBuildListResponse:
     try:
         result = KnowledgeIndexService(db).list_for_tenant(
@@ -126,8 +127,9 @@ def list_knowledge_index_builds(
     status_code=201,
 )
 def create_knowledge_index_build(
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.publish")),
 ) -> KnowledgeIndexBuildResponse:
     try:
         build = KnowledgeIndexService(db).create_candidate(
@@ -138,6 +140,14 @@ def create_knowledge_index_build(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except KnowledgeIndexBuildError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="knowledge.build_created",
+        target_type="knowledge_index_build",
+        target_id=build.id,
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return KnowledgeIndexBuildResponse(data=_index_build_data(build))
 
 
@@ -148,7 +158,7 @@ def create_knowledge_index_build(
 def get_knowledge_index_build(
     build_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.test")),
 ) -> KnowledgeIndexBuildResponse:
     try:
         build = KnowledgeIndexService(db).get_for_tenant(
@@ -166,8 +176,9 @@ def get_knowledge_index_build(
 )
 def activate_knowledge_index_build(
     build_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.publish")),
 ) -> KnowledgeIndexBuildResponse:
     try:
         build = KnowledgeIndexService(db).activate(
@@ -178,6 +189,14 @@ def activate_knowledge_index_build(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except KnowledgeIndexStateError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="knowledge.build_activated",
+        target_type="knowledge_index_build",
+        target_id=build.id,
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return KnowledgeIndexBuildResponse(data=_index_build_data(build))
 
 
@@ -186,19 +205,29 @@ def activate_knowledge_index_build(
     response_model=KnowledgeIndexBuildResponse,
 )
 def rollback_knowledge_index_build(
-    request: KnowledgeRollbackRequest,
+    payload: KnowledgeRollbackRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.publish")),
 ) -> KnowledgeIndexBuildResponse:
     try:
         build = KnowledgeIndexService(db).rollback(
             tenant_id=admin.tenant_id,
-            target_build_id=request.target_build_id,
+            target_build_id=payload.target_build_id,
         )
     except KnowledgeIndexNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except KnowledgeIndexStateError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="knowledge.build_rolled_back",
+        target_type="knowledge_index_build",
+        target_id=build.id,
+        after_data={"target_build_id": payload.target_build_id},
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return KnowledgeIndexBuildResponse(data=_index_build_data(build))
 
 
@@ -211,7 +240,7 @@ def list_knowledge_documents(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeDocumentListResponse:
     try:
         result = KnowledgeDocumentService(db).list_for_tenant(
@@ -244,7 +273,7 @@ def upload_knowledge_document(
     knowledge_type: str = Form(...),
     category: str = Form(default="通用", max_length=100),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeDocumentResponse:
     try:
         document = KnowledgeDocumentService(db).create_document(
@@ -272,7 +301,7 @@ def upload_knowledge_revision(
     document_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeDocumentResponse:
     try:
         document = KnowledgeDocumentService(db).create_revision(
@@ -298,7 +327,7 @@ def upload_knowledge_revision(
 def get_knowledge_document(
     document_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeDocumentResponse:
     try:
         document = KnowledgeDocumentService(db).get_for_tenant(
@@ -317,7 +346,7 @@ def get_knowledge_document(
 def parse_knowledge_revision(
     revision_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeRevisionResponse:
     try:
         revision = KnowledgeDocumentService(db).parse_revision(
@@ -340,7 +369,7 @@ def parse_knowledge_revision(
 def get_knowledge_revision_content(
     revision_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeContentResponse:
     service = KnowledgeDocumentService(db)
     try:
@@ -368,7 +397,7 @@ def update_knowledge_revision_content(
     revision_id: int,
     request: KnowledgeContentUpdateRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.draft")),
 ) -> KnowledgeRevisionResponse:
     try:
         revision = KnowledgeDocumentService(db).update_processed_content(
@@ -391,8 +420,9 @@ def update_knowledge_revision_content(
 )
 def approve_knowledge_revision(
     revision_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.review")),
 ) -> KnowledgeRevisionResponse:
     try:
         revision = KnowledgeDocumentService(db).approve_revision(
@@ -404,6 +434,14 @@ def approve_knowledge_revision(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except KnowledgeDocumentStateError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="knowledge.revision_approved",
+        target_type="knowledge_revision",
+        target_id=revision_id,
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return KnowledgeRevisionResponse(data=_revision_data(revision))
 
 
@@ -415,7 +453,7 @@ def update_knowledge_revision_validity(
     revision_id: int,
     request: KnowledgeValidityUpdateRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.review")),
 ) -> KnowledgeRevisionResponse:
     try:
         revision = KnowledgeDocumentService(db).update_validity(
@@ -437,16 +475,17 @@ def update_knowledge_revision_validity(
 )
 def reject_knowledge_revision(
     revision_id: int,
-    request: KnowledgeRejectRequest,
+    payload: KnowledgeRejectRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission("knowledge.review")),
 ) -> KnowledgeRevisionResponse:
     try:
         revision = KnowledgeDocumentService(db).reject_revision(
             tenant_id=admin.tenant_id,
             revision_id=revision_id,
             reviewed_by=admin.id,
-            reason=request.reason,
+            reason=payload.reason,
         )
     except KnowledgeDocumentNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -454,6 +493,15 @@ def reject_knowledge_revision(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except KnowledgeDocumentStateError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    AdminAuditService(db).record(
+        actor=admin,
+        action="knowledge.revision_rejected",
+        target_type="knowledge_revision",
+        target_id=revision_id,
+        reason=payload.reason,
+        ip_address=request.client.host if request.client else None,
+        commit=True,
+    )
     return KnowledgeRevisionResponse(data=_revision_data(revision))
 
 

@@ -1,6 +1,7 @@
 """尺码工具适配器：将Service结果转换为LLM可消费的结构化数据。"""
 
 from app.services.size_service import SizeService, SizeServiceError
+from app.tools.executor import ToolErrorCategory, ToolErrorDetail, failure_result
 
 
 def size_recommend(
@@ -15,11 +16,13 @@ def size_recommend(
             style=style,
         )
     except SizeServiceError as error:
-        return {
-            "success": False,
-            "data": None,
-            "error": str(error),
-        }
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.VALIDATION,
+            code="invalid_size_arguments",
+            message=str(error),
+            retryable=True,
+            correction_hint="核对身高、体重单位和版型偏好后重新生成参数",
+        ))
 
     return {
         "success": True,

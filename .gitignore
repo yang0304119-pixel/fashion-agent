@@ -18,6 +18,7 @@ env/
 
 # Database (generated locally)
 *.db
+data/*.db.*.bak
 data/.jwt_secret
 data/dev_auth_credentials.txt
 

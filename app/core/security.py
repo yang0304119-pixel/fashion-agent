@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass
 
 from app.core.config import settings
+from app.core.permissions import ALLOWED_ROLES
 
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ def decode_access_token(token: str) -> AccessTokenClaims:
         raise TokenError("访问令牌已过期")
     if issued_at > now + 60:
         raise TokenError("访问令牌签发时间无效")
-    if user_id <= 0 or tenant_id <= 0 or role not in {"customer", "admin"}:
+    if user_id <= 0 or tenant_id <= 0 or role not in ALLOWED_ROLES:
         raise TokenError("访问令牌身份无效")
 
     return AccessTokenClaims(

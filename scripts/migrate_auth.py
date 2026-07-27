@@ -38,7 +38,7 @@ def migrate(
         _require_table(connection, "user")
         _add_column(connection, "user", "tenant_id", "INTEGER NOT NULL DEFAULT 1")
         _add_column(connection, "user", "password_hash", "VARCHAR(255) NOT NULL DEFAULT ''")
-        _add_column(connection, "user", "role", "VARCHAR(20) NOT NULL DEFAULT 'customer'")
+        _add_column(connection, "user", "role", "VARCHAR(50) NOT NULL DEFAULT 'customer'")
         _add_column(connection, "user", "is_active", "BOOLEAN NOT NULL DEFAULT 1")
 
         customer_hash = hash_password(customer_password)
@@ -58,14 +58,14 @@ def migrate(
         if admin:
             connection.execute(
                 'UPDATE "user" SET tenant_id = ?, password_hash = ?, '
-                "role = 'admin', is_active = 1 WHERE id = ?",
+                "role = 'tenant_admin', is_active = 1 WHERE id = ?",
                 (tenant_id, admin_hash, admin[0]),
             )
         else:
             connection.execute(
                 'INSERT INTO "user" '
                 "(tenant_id, username, password_hash, role, is_active) "
-                "VALUES (?, ?, ?, 'admin', 1)",
+                "VALUES (?, ?, ?, 'tenant_admin', 1)",
                 (tenant_id, admin_username, admin_hash),
             )
 
@@ -164,12 +164,13 @@ def verify_database(database_path: Path) -> None:
 
         invalid_users = connection.execute(
             'SELECT count(*) FROM "user" WHERE tenant_id IS NULL '
-            "OR password_hash = '' OR role NOT IN ('customer', 'admin') "
+            "OR password_hash = '' OR role NOT IN "
+            "('customer','customer_service','supervisor','tenant_admin','developer') "
             "OR is_active IS NULL"
         ).fetchone()[0]
         admin_count = connection.execute(
             'SELECT count(*) FROM "user" '
-            "WHERE role = 'admin' AND is_active = 1"
+            "WHERE role = 'tenant_admin' AND is_active = 1"
         ).fetchone()[0]
         if invalid_users:
             raise RuntimeError(f"存在 {invalid_users} 个未完成认证迁移的用户")

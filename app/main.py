@@ -27,9 +27,12 @@ from app.routers import (
     chat,
     demo_store,
     knowledge,
+    memories,
     orders,
     refunds,
     tickets,
+    tenant_users,
+    agentops,
 )
 
 # ── 日志配置 ──
@@ -43,7 +46,7 @@ logger = logging.getLogger(__name__)
 fastapi_app = FastAPI(
     title="FashionAgent",
     description="电商 AI 客服自动化与辅助系统 API",
-    version="0.4.0",
+    version="0.6.0",
 )
 
 
@@ -60,7 +63,7 @@ def on_startup() -> None:
 @fastapi_app.get("/api/health", tags=["system"])
 def health():
     """健康检查端点。"""
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.6.0"}
 
 
 # ── 注册业务路由 ──
@@ -73,6 +76,10 @@ fastapi_app.include_router(tickets.router, prefix="/api")
 fastapi_app.include_router(refunds.router, prefix="/api")
 fastapi_app.include_router(admin.router, prefix="/api")
 fastapi_app.include_router(knowledge.router, prefix="/api")
+fastapi_app.include_router(memories.router, prefix="/api")
+fastapi_app.include_router(memories.admin_router, prefix="/api")
+fastapi_app.include_router(tenant_users.router, prefix="/api")
+fastapi_app.include_router(agentops.router, prefix="/api")
 
 # ── 可选的静态文件挂载（前端） ──
 

@@ -4,12 +4,14 @@
 接收用户消息，走完 Agent 工作流后返回回答。
 """
 
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.agent.graph import app as agent_app
+from app.core.config import settings
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -37,11 +39,22 @@ def chat(
         intent / confidence / answer 等业务字段。
     """
     session_id = request.session_id or uuid4().hex
+    started_at = datetime.now(UTC)
     state = {
         "session_id": session_id,
         "user_id": current_user.id,
         "tenant_id": current_user.tenant_id,
         "message": request.message,
+        "execution_started_at": started_at.isoformat(),
+        "execution_deadline_at": (
+            started_at + timedelta(seconds=settings.AGENT_MAX_EXECUTION_SECONDS)
+        ).isoformat(),
+        "execution_budget": {
+            "max_iterations": settings.AGENT_MAX_ITERATIONS,
+            "max_tool_calls": settings.AGENT_MAX_TOOL_CALLS,
+            "max_execution_seconds": settings.AGENT_MAX_EXECUTION_SECONDS,
+            "max_llm_output_tokens": settings.AGENT_MAX_LLM_OUTPUT_TOKENS,
+        },
     }
     if request.context is not None:
         try:

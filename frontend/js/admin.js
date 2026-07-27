@@ -1,5 +1,10 @@
 import { apiFetch, getAccessToken, readJson } from './api.js';
 import { logout, restoreUser } from './auth.js';
+import {
+  applyPermissionVisibility,
+  hasPermission,
+  permittedViews,
+} from './admin-permissions.js';
 
 
 const PAGE_SIZE = 20;
@@ -43,12 +48,13 @@ async function bootstrap() {
   }
   try {
     state.user = await restoreUser();
-    if (state.user?.role !== 'admin') {
+    if (!state.user || !(state.user.permissions || []).length) {
       logout();
-      redirectToLogin('当前账号没有管理员权限。');
+      redirectToLogin('当前账号没有商家工作台权限。');
       return;
     }
-    document.getElementById('adminIdentity').textContent = `${state.user.username} · 管理员`;
+    applyPermissionVisibility(state.user);
+    document.getElementById('adminIdentity').textContent = `${state.user.username} · ${state.user.role_label || state.user.role}`;
     document.getElementById('adminGuard').classList.add('hidden');
     document.getElementById('adminPanel').classList.remove('hidden');
     await openCurrentView();
@@ -66,6 +72,8 @@ function bindEvents() {
     logout();
     window.location.href = '/';
   });
+  document.getElementById('staffUserCreateForm').addEventListener('submit', createStaffUser);
+  document.getElementById('tenantSettingsForm').addEventListener('submit', saveTenantSettings);
   document.getElementById('refreshRefundsBtn').addEventListener('click', refreshWorkspace);
   window.addEventListener('hashchange', openCurrentView);
   document.getElementById('adminOrderStatusFilter').addEventListener('change', () => {
@@ -173,8 +181,15 @@ function bindEvents() {
 
 async function openCurrentView() {
   const requestedView = window.location.hash.replace('#', '');
-  const availableViews = ['dashboard', 'knowledge', 'orders', 'refunds', 'tickets', 'traces', 'cases'];
-  state.view = availableViews.includes(requestedView) ? requestedView : 'dashboard';
+  const availableViews = permittedViews(state.user);
+  const defaultView = availableViews.includes(state.user.home_view)
+    ? state.user.home_view
+    : availableViews[0];
+  if (requestedView && !availableViews.includes(requestedView)) {
+    state.view = 'forbidden';
+  } else {
+    state.view = requestedView || defaultView || 'forbidden';
+  }
   document.querySelectorAll('[data-admin-view]').forEach((link) => {
     link.classList.toggle('active', link.dataset.adminView === state.view);
   });
@@ -187,27 +202,34 @@ async function openCurrentView() {
   const title = heading.querySelector('h1');
   const description = heading.querySelector('p:not(.eyebrow)');
   const refreshButton = document.getElementById('refreshRefundsBtn');
-  if (state.view === 'dashboard') {
+  refreshButton.classList.remove('hidden');
+  if (state.view === 'forbidden') {
+    eyebrow.textContent = 'ACCESS DENIED';
+    title.textContent = '无权访问';
+    description.textContent = '当前账号没有访问该工作区的权限。';
+    refreshButton.classList.add('hidden');
+  } else if (state.view === 'dashboard') {
+    refreshButton.classList.remove('hidden');
     eyebrow.textContent = 'OPERATIONS OVERVIEW';
-    title.textContent = '运营总览';
-    description.textContent = '查看当前租户的客服业务和待办事项。';
-    refreshButton.textContent = '刷新总览';
+    title.textContent = '今日待办';
+    description.textContent = '优先处理人工接管、退款审核和未解决问题。';
+    refreshButton.textContent = '刷新待办';
     await loadDashboard();
   } else if (state.view === 'knowledge') {
     eyebrow.textContent = 'KNOWLEDGE LIFECYCLE';
-    title.textContent = '知识文档';
+    title.textContent = '知识运营';
     description.textContent = '上传、解析、修订和审核当前租户的商家知识。';
     refreshButton.textContent = '刷新文档';
     await Promise.all([loadKnowledgeDocuments(), loadKnowledgeBuilds()]);
   } else if (state.view === 'orders') {
     eyebrow.textContent = 'BUSINESS CONTEXT';
-    title.textContent = '业务上下文';
+    title.textContent = '订单查询';
     description.textContent = '只读查看外部业务系统提供的用户、商品、订单与关联售后信息。';
     refreshButton.textContent = '刷新上下文';
     await loadOrders();
   } else if (state.view === 'tickets') {
     eyebrow.textContent = 'SERVICE OPERATIONS';
-    title.textContent = '人工接管与工单';
+    title.textContent = '人工处理';
     description.textContent = '查看复杂问题的人工接管、关联业务数据和处理结果。';
     refreshButton.textContent = '刷新工单';
     await loadTickets();
@@ -223,10 +245,46 @@ async function openCurrentView() {
     description.textContent = '人工标注意图和答案，并维护知识库候选队列。';
     refreshButton.textContent = '刷新案例';
     await Promise.all([loadCaseStats(), loadCases()]);
+  } else if (state.view === 'quality') {
+    eyebrow.textContent = 'BUSINESS QUALITY';
+    title.textContent = '业务质检';
+    description.textContent = '从业务视角复核AI是否解决问题、是否转人工以及下一步如何处理。';
+    refreshButton.textContent = '刷新质检';
+    await loadBusinessQuality();
+  } else if (state.view === 'memory') {
+    eyebrow.textContent = 'MEMORY GOVERNANCE';
+    title.textContent = '记忆系统';
+    description.textContent = '查看当前租户记忆类型、状态和写入/召回/淘汰事件统计。';
+    refreshButton.textContent = '刷新记忆统计';
+    await loadMemoryStats();
+  } else if (state.view === 'users') {
+    eyebrow.textContent = 'STAFF ACCOUNTS';
+    title.textContent = '账号管理';
+    description.textContent = '创建独立员工账号并分配最小权限角色。';
+    refreshButton.textContent = '刷新账号';
+    await loadStaffUsers();
+  } else if (state.view === 'settings') {
+    eyebrow.textContent = 'TENANT SETTINGS';
+    title.textContent = '租户设置';
+    description.textContent = '维护商家信息和退款风险阈值。';
+    refreshButton.textContent = '刷新设置';
+    await loadTenantSettings();
+  } else if (state.view === 'audit') {
+    eyebrow.textContent = 'HUMAN AUDIT';
+    title.textContent = '操作审计';
+    description.textContent = '追踪退款审批、知识发布和账号配置变更。';
+    refreshButton.textContent = '刷新审计';
+    await loadAuditEvents();
+  } else if (state.view === 'agentops') {
+    eyebrow.textContent = 'AGENTOPS';
+    title.textContent = 'AgentOps';
+    description.textContent = '查看RAG、工具、安全边界和系统健康诊断。';
+    refreshButton.textContent = '刷新诊断';
+    await loadAgentOps();
   } else {
     applyRefundStatusUI();
     eyebrow.textContent = 'HIGH-RISK REVIEW';
-    title.textContent = '高风险操作审核';
+    title.textContent = '退款审核';
     description.textContent = '审核退款等高风险业务请求，并追踪外部渠道执行结果。';
     refreshButton.textContent = '刷新数据';
     await Promise.all([loadStatusCounts(), loadRefunds()]);
@@ -270,12 +328,322 @@ async function refreshWorkspace() {
     } else if (state.view === 'cases') {
       await Promise.all([loadCaseStats(), loadCases()]);
       showToast('未解决案例已刷新。');
+    } else if (state.view === 'quality') {
+      await loadBusinessQuality();
+      showToast('业务质检已刷新。');
+    } else if (state.view === 'memory') {
+      await loadMemoryStats();
+      showToast('记忆统计已刷新。');
+    } else if (state.view === 'users') {
+      await loadStaffUsers();
+      showToast('员工账号已刷新。');
+    } else if (state.view === 'settings') {
+      await loadTenantSettings();
+      showToast('租户设置已刷新。');
+    } else if (state.view === 'audit') {
+      await loadAuditEvents();
+      showToast('审计日志已刷新。');
+    } else if (state.view === 'agentops') {
+      await loadAgentOps();
+      showToast('AgentOps诊断已刷新。');
     } else {
       await Promise.all([loadStatusCounts(), loadRefunds()]);
       showToast('退款数据已刷新。');
     }
   } finally {
     button.disabled = false;
+  }
+}
+
+
+async function loadMemoryStats() {
+  const content = document.getElementById('memoryStatsContent');
+  content.textContent = '正在读取记忆统计…';
+  try {
+    const payload = await requestJson('/api/admin/memories/stats');
+    const data = payload.data || {};
+    const statuses = data.by_status || {};
+    document.getElementById('memoryTotal').textContent = String(data.total || 0);
+    document.getElementById('memoryActive').textContent = String(statuses.active || 0);
+    document.getElementById('memoryInactive').textContent = String(
+      Object.entries(statuses)
+        .filter(([status]) => status !== 'active')
+        .reduce((total, [, count]) => total + Number(count || 0), 0)
+    );
+    content.replaceChildren();
+    [
+      ['按类型', data.by_type || {}],
+      ['按状态', statuses],
+      ['生命周期事件', data.events || {}],
+    ].forEach(([title, values]) => {
+      const section = element('section', 'trace-detail-section');
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      const body = document.createElement('p');
+      body.textContent = Object.keys(values).length
+        ? Object.entries(values).map(([key, value]) => `${key}: ${value}`).join(' · ')
+        : '暂无数据';
+      section.append(heading, body);
+      content.appendChild(section);
+    });
+  } catch (error) {
+    ['memoryTotal', 'memoryActive', 'memoryInactive'].forEach((id) => {
+      document.getElementById(id).textContent = '—';
+    });
+    content.textContent = error.message || '记忆统计读取失败。';
+  }
+}
+
+
+async function loadBusinessQuality() {
+  const container = document.getElementById('businessQualityContent');
+  showLoadingState(container, '正在读取业务质检样本…');
+  try {
+    const payload = await requestJson('/api/admin/quality-report?limit=30');
+    const summary = payload.data.summary;
+    document.getElementById('qualityTotalRequests').textContent = String(summary.total_requests || 0);
+    document.getElementById('qualityResolutionRate').textContent = `${Number(summary.automatic_resolution_rate || 0).toFixed(1)}%`;
+    document.getElementById('qualityHumanHandoffs').textContent = String(summary.human_handoffs || 0);
+    document.getElementById('qualityFailedRequests').textContent = String(summary.failed_requests || 0);
+
+    if (!payload.data.cases.length) {
+      showEmptyState(container, '暂无质检样本', '产生会话后，这里会展示业务化的抽检信息。');
+      return;
+    }
+    const list = element('div', 'trace-list');
+    payload.data.cases.forEach((item) => {
+      const card = element('article', 'trace-detail-section');
+      const status = item.resolved ? '已自动解决' : (item.transferred_to_human ? '已转人工' : '待复核');
+      card.append(
+        element('h3', '', `${status} · ${item.intent || '未识别意图'}`),
+        element('p', '', `用户问题：${item.user_question || '—'}`),
+        element('p', '', `AI回复：${item.ai_answer || '—'}`),
+      );
+      if (item.business_issue) {
+        card.append(element('p', '', `业务问题：${item.business_issue}`));
+      }
+      if (item.citations.length) {
+        const labels = item.citations.map((source) => (
+          source.title || source.filename || source.source || source.citation || '商家知识'
+        ));
+        card.append(element('p', '', `引用资料：${labels.join('、')}`));
+      }
+      card.append(
+        element('p', '', `建议操作：${item.suggested_action}`),
+        element('p', '', `时间：${formatDate(item.created_at)} · 会话：${item.session_id}`),
+      );
+      list.appendChild(card);
+    });
+    container.replaceChildren(list);
+  } catch (error) {
+    showErrorState(container, error.message);
+  }
+}
+
+
+async function loadStaffUsers() {
+  const container = document.getElementById('staffUsersContent');
+  showLoadingState(container, '正在读取员工账号…');
+  try {
+    const payload = await requestJson('/api/admin/users');
+    renderStaffUsers(container, payload.data || []);
+  } catch (error) {
+    showErrorState(container, error.message);
+  }
+}
+
+
+function renderStaffUsers(container, users) {
+  if (!users.length) {
+    showEmptyState(container, '暂无员工账号', '创建客服、主管、管理员或开发人员账号。');
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'data-table';
+  const head = document.createElement('thead');
+  head.innerHTML = '<tr><th>账号</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr>';
+  const body = document.createElement('tbody');
+  users.forEach((user) => {
+    const row = document.createElement('tr');
+    [
+      user.username,
+      user.role_label || user.role,
+      user.is_active ? '启用' : '停用',
+      formatDate(user.created_at),
+    ].forEach((value) => {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.appendChild(cell);
+    });
+    const actions = document.createElement('td');
+    actions.append(
+      actionButton('修改角色', 'secondary', () => changeStaffRole(user)),
+      actionButton(user.is_active ? '停用' : '启用', 'secondary', () => toggleStaffUser(user)),
+      actionButton('重置密码', 'secondary', () => resetStaffPassword(user)),
+    );
+    row.appendChild(actions);
+    body.appendChild(row);
+  });
+  table.append(head, body);
+  container.replaceChildren(table);
+}
+
+
+async function createStaffUser(event) {
+  event.preventDefault();
+  const payload = {
+    username: document.getElementById('staffUsername').value.trim(),
+    password: document.getElementById('staffPassword').value,
+    role: document.getElementById('staffRole').value,
+  };
+  try {
+    await requestJson('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    event.target.reset();
+    showToast('员工账号已创建。');
+    await Promise.all([loadStaffUsers(), loadAuditEvents()]);
+  } catch (error) {
+    showToast(error.message || '账号创建失败。');
+  }
+}
+
+
+async function changeStaffRole(user) {
+  const role = window.prompt(
+    '输入新角色：customer_service / supervisor / tenant_admin / developer',
+    user.role,
+  );
+  if (!role || role === user.role) return;
+  await updateStaffUser(user.id, { role, reason: '运营台修改员工角色' });
+}
+
+
+async function toggleStaffUser(user) {
+  await updateStaffUser(user.id, {
+    is_active: !user.is_active,
+    reason: user.is_active ? '运营台停用员工账号' : '运营台启用员工账号',
+  });
+}
+
+
+async function updateStaffUser(userId, changes) {
+  try {
+    await requestJson(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    showToast('员工账号已更新。');
+    await Promise.all([loadStaffUsers(), loadAuditEvents()]);
+  } catch (error) {
+    showToast(error.message || '账号更新失败。');
+  }
+}
+
+
+async function resetStaffPassword(user) {
+  const password = window.prompt(`为 ${user.username} 设置不少于12位的新密码`);
+  if (!password) return;
+  try {
+    await requestJson(`/api/admin/users/${user.id}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    showToast('密码已重置。');
+    await loadAuditEvents();
+  } catch (error) {
+    showToast(error.message || '密码重置失败。');
+  }
+}
+
+
+async function loadTenantSettings() {
+  try {
+    const payload = await requestJson('/api/admin/tenant-settings');
+    document.getElementById('tenantName').value = payload.data.name || '';
+    document.getElementById('tenantContact').value = payload.data.contact || '';
+    document.getElementById('tenantRefundLimit').value = payload.data.refund_auto_limit;
+  } catch (error) {
+    showToast(error.message || '租户设置读取失败。');
+  }
+}
+
+
+async function saveTenantSettings(event) {
+  event.preventDefault();
+  try {
+    await requestJson('/api/admin/tenant-settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: document.getElementById('tenantName').value.trim(),
+        contact: document.getElementById('tenantContact').value.trim(),
+        refund_auto_limit: document.getElementById('tenantRefundLimit').value,
+      }),
+    });
+    showToast('租户设置已保存。');
+  } catch (error) {
+    showToast(error.message || '租户设置保存失败。');
+  }
+}
+
+
+async function loadAuditEvents() {
+  const container = document.getElementById('auditEventsContent');
+  if (!hasPermission(state.user, 'audit.read')) return;
+  showLoadingState(container, '正在读取审计日志…');
+  try {
+    const payload = await requestJson('/api/admin/audit-events?page=1&page_size=100');
+    if (!payload.data.length) {
+      showEmptyState(container, '暂无审计记录', '退款审批、知识发布和账号变更将在这里记录。');
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'trace-list';
+    payload.data.forEach((item) => {
+      const card = element('article', 'trace-detail-section');
+      card.append(
+        element('h3', '', item.action),
+        element('p', '', `${item.actor_role} #${item.actor_user_id} → ${item.target_type} ${item.target_id || ''}`),
+        element('p', '', `${formatDate(item.created_at)}${item.reason ? ` · ${item.reason}` : ''}`),
+      );
+      list.appendChild(card);
+    });
+    container.replaceChildren(list);
+  } catch (error) {
+    showErrorState(container, error.message);
+  }
+}
+
+
+async function loadAgentOps() {
+  const container = document.getElementById('agentopsContent');
+  showLoadingState(container, '正在读取AgentOps诊断…');
+  try {
+    const [health, rag, tools, boundaries] = await Promise.all([
+      requestJson('/api/agentops/health'),
+      requestJson('/api/agentops/rag/stats'),
+      requestJson('/api/agentops/tools/stats'),
+      requestJson('/api/agentops/boundaries/events?limit=50'),
+    ]);
+    document.getElementById('agentopsHealth').textContent = health.data.status;
+    document.getElementById('agentopsRagRequests').textContent = String(rag.data.requests || 0);
+    document.getElementById('agentopsToolEvents').textContent = String(
+      (tools.data || []).reduce((total, item) => total + Number(item.count || 0), 0)
+    );
+    document.getElementById('agentopsBoundaryEvents').textContent = String((boundaries.data || []).length);
+    container.textContent = [
+      `RAG失败：${rag.data.failed || 0}`,
+      `包含来源的回答：${rag.data.with_sources || 0}`,
+      `Trace总数：${health.data.trace_count || 0}`,
+      `记忆记录：${health.data.memory_record_count || 0}`,
+    ].join(' · ');
+  } catch (error) {
+    showErrorState(container, error.message);
   }
 }
 
@@ -1089,7 +1457,7 @@ async function loadTraces() {
   if (status) params.set('status', status);
 
   try {
-    const payload = await requestJson(`/api/admin/traces?${params}`);
+    const payload = await requestJson(`/api/agentops/traces?${params}`);
     renderTraceSessions(payload.data);
     renderTraceTimeline(payload.data);
     renderTracePagination(payload);
@@ -1379,7 +1747,7 @@ async function loadTraceSession(sessionId) {
   const timeline = document.getElementById('traceTimeline');
   showLoadingState(timeline, '正在读取会话时间线…');
   try {
-    const payload = await requestJson(`/api/admin/trace-sessions/${encodeURIComponent(sessionId)}`);
+    const payload = await requestJson(`/api/agentops/trace-sessions/${encodeURIComponent(sessionId)}`);
     renderTraceTimeline(payload.data);
     renderTraceSessions(payload.data);
     document.getElementById('tracesPagination').replaceChildren();
@@ -1425,7 +1793,7 @@ async function loadTraceDetail(traceId) {
   const container = document.getElementById('traceDetail');
   showLoadingState(container, '正在读取节点详情…');
   try {
-    const payload = await requestJson(`/api/admin/traces/${traceId}`);
+    const payload = await requestJson(`/api/agentops/traces/${traceId}`);
     renderTraceDetail(container, payload.data);
     document.getElementById('selectedTraceLabel').textContent = `Trace #${traceId}`;
     document.querySelectorAll('.timeline-pane .trace-list-button').forEach((button) => button.classList.remove('active'));
@@ -1485,6 +1853,10 @@ function traceStepsSection(steps) {
       const meta = document.createElement('small');
       const parts = [`${step.duration_ms ?? 0} ms`];
       if (step.tool_name) parts.push(`工具：${step.tool_name}`);
+      if (step.attempt) parts.push(`第 ${step.attempt} 次`);
+      if (step.error_category) parts.push(`分类：${step.error_category}`);
+      if (step.recovery_action) parts.push(`恢复：${step.recovery_action}`);
+      if (step.retry_delay_ms) parts.push(`退避：${step.retry_delay_ms} ms`);
       if (step.missing_slots.length) parts.push(`缺失：${step.missing_slots.join('、')}`);
       if (step.error) parts.push(`错误阶段：${step.error.stage || 'unknown'}`);
       meta.textContent = parts.join(' · ');
@@ -2361,8 +2733,9 @@ function localDateTimePayload(inputId) {
 }
 
 
-function element(tagName, className = '') {
+function element(tagName, className = '', text = null) {
   const node = document.createElement(tagName);
   if (className) node.className = className;
+  if (text !== null) node.textContent = text;
   return node;
 }

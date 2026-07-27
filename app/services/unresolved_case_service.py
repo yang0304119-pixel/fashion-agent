@@ -24,6 +24,9 @@ SUPPORTED_INTENTS = frozenset(
         "inventory_query",
         "size_recommend",
         "refund_request",
+        "refund_status_query",
+        "after_sales_request",
+        "human_handoff",
         "composite_query",
         "fallback",
     }

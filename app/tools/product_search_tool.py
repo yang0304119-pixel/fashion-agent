@@ -1,7 +1,13 @@
 """ReAct 使用的商品目录只读搜索工具。"""
 
+import logging
+
 from app.providers.factory import get_product_provider
 from app.providers.product_provider import InvalidProductSearchError, ProductProvider
+from app.tools.executor import ToolErrorCategory, ToolErrorDetail, failure_result
+
+
+logger = logging.getLogger(__name__)
 
 
 def search_products(
@@ -17,13 +23,21 @@ def search_products(
             query=query,
         )
     except InvalidProductSearchError as error:
-        return {"success": False, "data": None, "error": str(error)}
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.VALIDATION,
+            code="invalid_product_search",
+            message=str(error),
+            retryable=True,
+            correction_hint="提供非空、具体的商品名称或关键词",
+        ))
     except Exception:
-        return {
-            "success": False,
-            "data": None,
-            "error": "商品搜索暂时失败，请稍后重试",
-        }
+        logger.exception("商品搜索工具调用Provider失败")
+        return failure_result(ToolErrorDetail(
+            category=ToolErrorCategory.TRANSIENT,
+            code="product_provider_unavailable",
+            message="商品搜索暂时失败，请稍后重试",
+            retryable=True,
+        ))
 
     return {
         "success": True,

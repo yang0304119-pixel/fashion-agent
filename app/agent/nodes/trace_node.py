@@ -18,16 +18,18 @@ from app.services.trace_service import finalize_request_trace, record_unresolved
 def trace_node(state: AgentState) -> dict:
     """Trace 节点：记录请求日志和未解决问题。
 
-    纯副作用操作，不修改 state，写入失败不影响主流程。
+    写入失败不影响主流程；需要人工时返回通用人工队列编号。
 
     Args:
         state: 当前 AgentState。
 
     Returns:
-        空字典（trace 是副作用，不修改 state）。
+        可能包含 handoff_case_id。
     """
-    finalize_request_trace(state)
-    record_unresolved(state)
+    case_id = record_unresolved(state)
+    result = {"handoff_case_id": case_id} if case_id is not None else {}
+    merged_state = dict(state)
+    merged_state.update(result)
+    finalize_request_trace(merged_state)
 
-    # Trace 是纯副作用，不修改 state
-    return {}
+    return result

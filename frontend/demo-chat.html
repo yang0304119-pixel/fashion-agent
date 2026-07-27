@@ -24,6 +24,7 @@
         </div>
       </div>
       <div class="topbar-actions">
+        <button class="memory-button" id="openMemoryPanel" type="button">我的记忆</button>
         <a href="/admin.html">AI 客服运营台</a>
         <div class="member-chip">
           <span class="member-avatar" id="memberAvatar">客</span>
@@ -127,6 +128,17 @@
         <button class="dialog-close" type="button" data-close-dialog="orderPickerDialog" aria-label="关闭">×</button>
       </header>
       <div class="picker-content" id="orderPickerContent"></div>
+    </div>
+  </dialog>
+
+  <dialog class="picker-dialog memory-dialog" id="memoryDialog" aria-labelledby="memoryDialogTitle">
+    <div class="picker-frame">
+      <header class="picker-header">
+        <div><span class="section-kicker">MEMORY CONTROL</span><h2 id="memoryDialogTitle">我的长期记忆</h2><p>这里只展示明确保存的偏好和长期目标；价格、库存、订单与退款状态不会被长期记忆替代。</p></div>
+        <button class="dialog-close" type="button" data-close-dialog="memoryDialog" aria-label="关闭">×</button>
+      </header>
+      <div class="memory-toolbar"><button class="quiet-button" id="refreshMemories" type="button">刷新</button></div>
+      <div class="picker-content memory-list" id="memoryList"></div>
     </div>
   </dialog>
 

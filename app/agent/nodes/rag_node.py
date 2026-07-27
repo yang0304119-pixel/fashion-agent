@@ -1,6 +1,7 @@
 """RAG 知识问答节点。"""
 
 import logging
+from typing import Any
 
 from app.agent.state import AgentState
 from app.rag.errors import RagError
@@ -42,10 +43,16 @@ def rag_node(state: AgentState) -> dict:
         )
 
     try:
-        result = answer_question(
-            message,
-            tenant_id=state.get("tenant_id", 0),
-        )
+        answer_options: dict[str, Any] = {
+            "tenant_id": state.get("tenant_id", 0),
+        }
+        if state.get("recent_turns"):
+            answer_options["recent_turns"] = state["recent_turns"]
+        if state.get("conversation_summary"):
+            answer_options["conversation_summary"] = state[
+                "conversation_summary"
+            ]
+        result = answer_question(message, **answer_options)
     except FileNotFoundError as error:
         logger.exception(
             "RAG 知识库未初始化",

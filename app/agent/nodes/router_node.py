@@ -18,7 +18,6 @@ from app.agent.semantic_router import (
 from app.agent.slot_extractors import collect_slots, missing_slots_for_intent
 from app.agent.state import AgentState
 from app.core.database import SessionLocal
-from app.models.agent_trace import AgentTrace
 from app.services.conversation_state_service import ConversationStateService
 
 
@@ -240,38 +239,23 @@ def _context_conflicts_with_pending(context_type: str | None, pending: str) -> b
 def _context_summary(state: AgentState) -> str:
     context = state.get("chat_context") or {}
     slots = state.get("collected_slots") or {}
-    return f"context={context}; collected_slots={slots}; pending={state.get('pending_intent')}"
+    return (
+        f"context={context}; collected_slots={slots}; pending={state.get('pending_intent')}; "
+        f"task_checkpoint={state.get('task_checkpoint')}; memory_context={state.get('memory_context')}"
+    )
 
 
 def _recent_messages(state: AgentState) -> list[str]:
-    tenant_id = state.get("tenant_id", 0)
-    user_id = state.get("user_id", 0)
-    session_id = state.get("session_id", "")
-    if not tenant_id or not user_id or not session_id:
-        return []
-    db = SessionLocal()
-    try:
-        rows = (
-            db.query(AgentTrace.message)
-            .filter(
-                AgentTrace.tenant_id == tenant_id,
-                AgentTrace.user_id == user_id,
-                AgentTrace.session_id == session_id,
-                AgentTrace.message.is_not(None),
-            )
-            .order_by(AgentTrace.id.desc())
-            .limit(4)
-            .all()
-        )
-        messages = [str(row[0]) for row in reversed(rows) if row[0]]
-        current = state.get("message", "").strip()
-        if messages and messages[-1] == current:
-            messages.pop()
-        return messages[-3:]
-    except Exception:
-        return []
-    finally:
-        db.close()
+    turns = list(state.get("recent_turns") or [])
+    current = state.get("message", "").strip()
+    messages = [
+        f"{turn.get('role', 'user')}: {turn.get('content', '')}"
+        for turn in turns
+        if turn.get("content")
+    ]
+    if messages and messages[-1].endswith(current):
+        messages.pop()
+    return messages[-6:]
 
 
 def _classify_by_llm(message: str) -> tuple[str, float]:

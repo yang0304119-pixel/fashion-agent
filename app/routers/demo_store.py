@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.permissions import home_view_for_role, permissions_for_role, role_label
 from app.core.security import create_access_token
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
@@ -112,5 +113,8 @@ def create_demo_store_session(
             username=user.username,
             tenant_id=user.tenant_id,
             role=user.role,
+            role_label=role_label(user.role),
+            permissions=sorted(permissions_for_role(user.role)),
+            home_view=home_view_for_role(user.role),
         ),
     )

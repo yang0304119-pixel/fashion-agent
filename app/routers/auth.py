@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.passwords import verify_password
 from app.core.security import create_access_token
+from app.core.permissions import home_view_for_role, permissions_for_role, role_label
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
 from app.schemas.auth import AuthenticatedUser, LoginRequest, TokenResponse
@@ -18,7 +19,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def login(request: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     """校验账号密码并签发JWT；错误信息不区分账号或密码。"""
     username = request.username.strip()
-    user = db.query(User).filter(User.username == username).first()
+    query = db.query(User).filter(User.username == username)
+    if request.tenant_id is not None:
+        query = query.filter(User.tenant_id == request.tenant_id)
+    users = query.limit(2).all()
+    user = users[0] if len(users) == 1 else None
     if (
         user is None
         or not user.is_active
@@ -60,4 +65,7 @@ def _authenticated_user(user: User) -> AuthenticatedUser:
         username=user.username,
         tenant_id=user.tenant_id,
         role=user.role,
+        role_label=role_label(user.role),
+        permissions=sorted(permissions_for_role(user.role)),
+        home_view=home_view_for_role(user.role),
     )

@@ -14,6 +14,8 @@ class CustomerFrontendTests(unittest.TestCase):
         self.assertIn('id="currentOrderSlot"', html)
         self.assertIn('id="productPickerDialog"', html)
         self.assertIn('id="orderPickerDialog"', html)
+        self.assertIn('id="memoryDialog"', html)
+        self.assertIn('id="openMemoryPanel"', html)
         self.assertIn('src="/js/demo-chat.js"', html)
         for relative_path in (
             "css/app.css",
@@ -75,6 +77,9 @@ class CustomerFrontendTests(unittest.TestCase):
             self.assertIn(message_type, renderer + demo_script)
         self.assertNotIn("user_id", chat_script)
         self.assertNotIn("tenant_id", chat_script)
+        self.assertIn("/api/memories", demo_script)
+        self.assertIn("editMemory", demo_script)
+        self.assertIn("deleteMemory", demo_script)
 
     def test_store_redirects_to_demo_chat(self):
         html = (FRONTEND_ROOT / "store.html").read_text(encoding="utf-8")
@@ -136,14 +141,24 @@ class CustomerFrontendTests(unittest.TestCase):
         html = (FRONTEND_ROOT / "admin.html").read_text(encoding="utf-8")
         script = (FRONTEND_ROOT / "js" / "admin.js").read_text(encoding="utf-8")
         self.assertIn('data-admin-view="traces"', html)
+        self.assertIn('data-permission="agent.trace.read"', html)
         self.assertIn('id="traceSessionSearch"', html)
-        self.assertIn("/api/admin/traces", script)
-        self.assertIn("/api/admin/trace-sessions", script)
+        self.assertIn("/api/agentops/traces", script)
+        self.assertIn("/api/agentops/trace-sessions", script)
         self.assertIn("实际节点步骤", script)
         self.assertIn("缺失槽位", script)
         self.assertIn("RAG 来源", script)
         self.assertIn("最终回答", script)
         self.assertIn("错误阶段", script)
+
+    def test_admin_memory_governance_workspace_exists(self):
+        html = (FRONTEND_ROOT / "admin.html").read_text(encoding="utf-8")
+        script = (FRONTEND_ROOT / "js" / "admin.js").read_text(encoding="utf-8")
+        self.assertIn('data-admin-view="memory"', html)
+        self.assertIn('data-admin-panel="memory"', html)
+        self.assertIn('id="memoryTotal"', html)
+        self.assertIn('/api/admin/memories/stats', script)
+        self.assertIn('loadMemoryStats', script)
 
     def test_admin_unresolved_case_queue_only_marks_knowledge_candidates(self):
         html = (FRONTEND_ROOT / "admin.html").read_text(encoding="utf-8")
@@ -220,8 +235,47 @@ class CustomerFrontendTests(unittest.TestCase):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn("window.location.href = '/admin.html'", merchant_script)
         self.assertIn('id="merchantLoginForm"', index_html)
-        self.assertIn("该入口仅供商户授权的运营台管理员使用", merchant_script)
+        self.assertIn("该入口仅供商户授权的员工账号使用", merchant_script)
+        self.assertIn("permissionSet", merchant_script)
+        self.assertNotIn("role !== 'admin'", merchant_script)
         self.assertTrue((FRONTEND_ROOT / "js" / "admin.js").is_file())
+        self.assertTrue((FRONTEND_ROOT / "js" / "admin-permissions.js").is_file())
+
+    def test_admin_shell_is_permission_driven_and_has_role_workspaces(self):
+        html = (FRONTEND_ROOT / "admin.html").read_text(encoding="utf-8")
+        script = (FRONTEND_ROOT / "js" / "admin.js").read_text(encoding="utf-8")
+        permission_script = (
+            FRONTEND_ROOT / "js" / "admin-permissions.js"
+        ).read_text(encoding="utf-8")
+
+        for permission in (
+            "workbench.read",
+            "ticket.read",
+            "order.read",
+            "case.handle",
+            "quality.business.read",
+            "refund.review",
+            "knowledge.draft",
+            "user.manage",
+            "tenant.settings",
+            "audit.read",
+            "agent.trace.read",
+            "system.health.read",
+            "memory.diagnostics.read",
+        ):
+            self.assertIn(f'data-permission="{permission}"', html)
+
+        for panel in ("quality", "users", "settings", "audit", "agentops", "forbidden"):
+            self.assertIn(f'data-admin-panel="{panel}"', html)
+
+        self.assertIn('data-permission="knowledge.publish"', html)
+        self.assertIn("applyPermissionVisibility", script)
+        self.assertIn("permittedViews", script)
+        self.assertIn("state.view = 'forbidden'", script)
+        self.assertIn("home_view", script)
+        self.assertIn("/api/admin/quality-report", script)
+        self.assertIn("loadBusinessQuality", script)
+        self.assertIn("export function permissionSet", permission_script)
 
     def test_ai_customer_service_positioning_is_consistent(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")

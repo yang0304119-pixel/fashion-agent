@@ -1,6 +1,6 @@
 """Agent 请求中的实际节点执行步骤。"""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -23,6 +23,13 @@ class AgentTraceStep(Base):
     status = Column(String(20), nullable=False, default="running")
     missing_slots = Column(JSON, nullable=True)
     tool_name = Column(String(50), nullable=True)
+    attempt = Column(Integer, nullable=True)
+    input = Column(JSON, nullable=True)
+    output = Column(JSON, nullable=True)
+    error_category = Column(String(30), nullable=True)
+    retryable = Column(Boolean, nullable=True)
+    recovery_action = Column(String(50), nullable=True)
+    retry_delay_ms = Column(Integer, nullable=True)
     rag_sources = Column(JSON, nullable=True)
     error_stage = Column(String(50), nullable=True)
     error_code = Column(String(100), nullable=True)

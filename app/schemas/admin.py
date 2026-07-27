@@ -159,6 +159,13 @@ class AdminTraceStepData(BaseModel):
     status: str
     missing_slots: list[str]
     tool_name: str | None
+    attempt: int | None
+    input: dict | list | str | int | float | bool | None
+    output: dict | list | str | int | float | bool | None
+    error_category: str | None
+    retryable: bool | None
+    recovery_action: str | None
+    retry_delay_ms: int | None
     rag_sources: list[dict]
     error: AdminTraceError | None
     started_at: datetime | None
@@ -181,6 +188,38 @@ class AdminTraceSessionResponse(BaseModel):
     success: bool = True
     session_id: str
     data: list[AdminTraceListItem]
+
+
+class BusinessQualitySummary(BaseModel):
+    total_requests: int
+    resolved_requests: int
+    human_handoffs: int
+    failed_requests: int
+    automatic_resolution_rate: float
+
+
+class BusinessQualityDetail(BaseModel):
+    trace_id: int
+    session_id: str
+    user_question: str | None
+    ai_answer: str | None
+    intent: str | None
+    resolved: bool
+    transferred_to_human: bool
+    business_issue: str | None
+    citations: list[dict]
+    suggested_action: str
+    created_at: datetime | None
+
+
+class BusinessQualityReportData(BaseModel):
+    summary: BusinessQualitySummary
+    cases: list[BusinessQualityDetail]
+
+
+class BusinessQualityReportResponse(BaseModel):
+    success: bool = True
+    data: BusinessQualityReportData
 
 
 class AdminUnresolvedCaseListItem(BaseModel):

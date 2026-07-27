@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 from langchain_core.documents import Document
 
@@ -8,6 +9,7 @@ from app.rag.config import (
     RAG_BM25_WEIGHT,
     RAG_DENSE_WEIGHT,
     RAG_FETCH_K,
+    RAG_KNOWLEDGE_TYPE_BOOST,
     RAG_MIN_RELEVANCE,
     RAG_RRF_K,
     RAG_TOP_K,
@@ -15,7 +17,7 @@ from app.rag.config import (
 from app.rag.embeddings import get_embeddings
 from app.rag.errors import RagError
 from app.rag.query_rewriter import (
-    infer_knowledge_type,
+    infer_knowledge_type_scores,
     rewrite_query,
 )
 from app.rag.knowledge_index_resolver import (
@@ -85,17 +87,10 @@ def _current_effective_documents(
 
 
 def _load_bm25_documents(
-    knowledge_type: str | None,
     *,
     vector_store,
 ) -> list[Document]:
-    where = (
-        {"type": knowledge_type}
-        if knowledge_type
-        else None
-    )
     result = vector_store.get(
-        where=where,
         include=["documents", "metadatas"],
     )
     ids = result.get("ids") or []
@@ -122,6 +117,7 @@ def _fuse_results(
     bm25_results: list[BM25Result],
     *,
     top_k: int,
+    knowledge_type_scores: dict[str, float] | None = None,
 ) -> list[Document]:
     documents: dict[str, Document] = {}
     fusion_scores: defaultdict[str, float] = (
@@ -161,16 +157,29 @@ def _fuse_results(
         )
         document.metadata["bm25_rank"] = rank
 
+    type_scores = knowledge_type_scores or {}
+    adjusted_scores = {
+        key: fusion_scores[key]
+        * (
+            1
+            + RAG_KNOWLEDGE_TYPE_BOOST
+            * type_scores.get(
+                str(documents[key].metadata.get("type", "")),
+                0.0,
+            )
+        )
+        for key in fusion_scores
+    }
     ranked_keys = sorted(
         fusion_scores,
-        key=fusion_scores.get,
+        key=adjusted_scores.get,
         reverse=True,
     )
 
     if not ranked_keys:
         return []
 
-    maximum_score = fusion_scores[ranked_keys[0]]
+    maximum_score = adjusted_scores[ranked_keys[0]]
     ranked_documents: list[Document] = []
 
     for key in ranked_keys:
@@ -189,7 +198,11 @@ def _fuse_results(
             continue
 
         normalized_fusion_score = (
-            fusion_scores[key] / maximum_score
+            adjusted_scores[key] / maximum_score
+        )
+        type_weight = type_scores.get(
+            str(document.metadata.get("type", "")),
+            0.0,
         )
         document.metadata.setdefault("dense_score", 0.0)
         document.metadata.setdefault("dense_rank", 0)
@@ -197,6 +210,10 @@ def _fuse_results(
         document.metadata.setdefault("bm25_rank", 0)
         document.metadata["fusion_raw_score"] = float(
             fusion_scores[key]
+        )
+        document.metadata["knowledge_type_weight"] = float(type_weight)
+        document.metadata["knowledge_type_boost"] = float(
+            RAG_KNOWLEDGE_TYPE_BOOST * type_weight
         )
         document.metadata["fusion_score"] = float(
             normalized_fusion_score
@@ -213,12 +230,62 @@ def _fuse_results(
     return ranked_documents
 
 
+def _source_key(document: Document) -> str:
+    return str(
+        document.metadata.get("revision_id")
+        or document.metadata.get("document_id")
+        or document.metadata.get("relative_source")
+        or document.metadata.get("doc_id")
+        or _document_key(document)
+    )
+
+
+def _select_diverse_documents(
+    documents: list[Document],
+    *,
+    top_k: int,
+) -> list[Document]:
+    """Prefer one chunk per source, then fill remaining result slots."""
+    selected: list[Document] = []
+    selected_keys: set[str] = set()
+    seen_sources: set[str] = set()
+
+    for document in documents:
+        source = _source_key(document)
+        if source in seen_sources:
+            continue
+        selected.append(document)
+        selected_keys.add(_document_key(document))
+        seen_sources.add(source)
+        if len(selected) >= top_k:
+            break
+
+    if len(selected) < top_k:
+        for document in documents:
+            key = _document_key(document)
+            if key in selected_keys:
+                continue
+            selected.append(document)
+            selected_keys.add(key)
+            if len(selected) >= top_k:
+                break
+
+    for rank, document in enumerate(selected, start=1):
+        document.metadata["pre_diversity_rank"] = int(
+            document.metadata.get("fusion_rank", rank)
+        )
+        document.metadata["fusion_rank"] = rank
+    return selected
+
+
 def retrieve(
     query: str,
     *,
     tenant_id: int,
     build_id: int | None = None,
     top_k: int = RAG_TOP_K,
+    recent_turns: list[dict[str, Any]] | None = None,
+    conversation_summary: dict[str, Any] | None = None,
 ) -> list[Document]:
     query = query.strip()
 
@@ -229,15 +296,15 @@ def retrieve(
 
     fetch_k = max(RAG_FETCH_K, top_k)
 
-    rewritten_query = rewrite_query(query)
-    knowledge_type = infer_knowledge_type(
+    rewrite_context: dict[str, Any] = {}
+    if recent_turns:
+        rewrite_context["recent_turns"] = recent_turns
+    if conversation_summary:
+        rewrite_context["conversation_summary"] = conversation_summary
+    rewritten_query = rewrite_query(query, **rewrite_context)
+    knowledge_type_scores = infer_knowledge_type_scores(
         query,
         rewritten_query,
-    )
-    metadata_filter = (
-        {"type": knowledge_type}
-        if knowledge_type
-        else None
     )
 
     try:
@@ -271,11 +338,9 @@ def retrieve(
             .similarity_search_by_vector_with_relevance_scores(
                 embedding=query_embedding,
                 k=fetch_k,
-                filter=metadata_filter,
             )
         )
         bm25_documents = _load_bm25_documents(
-            knowledge_type,
             vector_store=vector_store,
         )
     except FileNotFoundError:
@@ -324,6 +389,11 @@ def retrieve(
     documents = _fuse_results(
         dense_results,
         bm25_results,
+        top_k=fetch_k,
+        knowledge_type_scores=knowledge_type_scores,
+    )
+    documents = _select_diverse_documents(
+        documents,
         top_k=top_k,
     )
 
@@ -333,7 +403,10 @@ def retrieve(
             rewritten_query
         )
         document.metadata["knowledge_type_filter"] = (
-            knowledge_type or ""
+            ",".join(knowledge_type_scores)
+        )
+        document.metadata["knowledge_type_candidates"] = list(
+            knowledge_type_scores
         )
 
     return documents

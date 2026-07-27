@@ -1,4 +1,5 @@
 import { login, logout } from './auth.js';
+import { permissionSet } from './admin-permissions.js';
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,7 +16,7 @@ async function submitLogin(event) {
   const button = document.getElementById('loginBtn');
 
   if (!username || !passwordInput.value) {
-    errorElement.textContent = '请输入运营台管理员账号和密码。';
+    errorElement.textContent = '请输入商家员工账号和密码。';
     return;
   }
 
@@ -24,9 +25,9 @@ async function submitLogin(event) {
   try {
     const user = await login(username, passwordInput.value);
     passwordInput.value = '';
-    if (user.role !== 'admin') {
+    if (!permissionSet(user).size) {
       logout();
-      errorElement.textContent = '该入口仅供商户授权的运营台管理员使用。';
+      errorElement.textContent = '该入口仅供商户授权的员工账号使用。';
       return;
     }
     window.location.href = '/admin.html';

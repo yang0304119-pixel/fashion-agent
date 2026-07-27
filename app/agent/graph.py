@@ -35,6 +35,10 @@ from app.agent.nodes.refund_status_node import refund_status_node
 from app.agent.nodes.trace_node import trace_node
 from app.agent.nodes.answer_node import answer_node
 from app.agent.nodes.conversation_state_node import conversation_state_node
+from app.agent.nodes.memory_load_node import memory_load_node
+from app.agent.nodes.memory_retrieve_node import memory_retrieve_node
+from app.agent.nodes.memory_commit_node import memory_commit_node
+from app.agent.nodes.boundary_guard_node import boundary_guard_node, route_after_goal_guard
 from app.services.trace_service import traced_node
 
 
@@ -43,7 +47,11 @@ from app.services.trace_service import traced_node
 workflow = StateGraph(AgentState)
 
 # 添加节点
+workflow.add_node("memory_load", traced_node("memory_load", memory_load_node))
+workflow.add_node("goal_guard", traced_node("goal_guard", boundary_guard_node))
 workflow.add_node("router", traced_node("router", router_node))
+workflow.add_node("boundary_guard", traced_node("boundary_guard", boundary_guard_node))
+workflow.add_node("memory_retrieve", traced_node("memory_retrieve", memory_retrieve_node))
 workflow.add_node("rag", traced_node("rag", rag_node))
 workflow.add_node("react", traced_node("react", react_node))
 workflow.add_node("refund", traced_node("refund", refund_node))
@@ -57,6 +65,7 @@ workflow.add_node(
     traced_node("refund_status", refund_status_node),
 )
 workflow.add_node("answer", traced_node("answer", answer_node))
+workflow.add_node("memory_commit", traced_node("memory_commit", memory_commit_node))
 workflow.add_node(
     "conversation_state",
     traced_node("conversation_state", conversation_state_node),
@@ -64,11 +73,19 @@ workflow.add_node(
 workflow.add_node("trace", traced_node("trace", trace_node))
 
 # 设置入口
-workflow.set_entry_point("router")
+workflow.set_entry_point("goal_guard")
+workflow.add_conditional_edges(
+    "goal_guard",
+    route_after_goal_guard,
+    {"continue": "memory_load", "handoff": "handoff"},
+)
+workflow.add_edge("memory_load", "router")
+workflow.add_edge("router", "boundary_guard")
+workflow.add_edge("boundary_guard", "memory_retrieve")
 
 # 条件路由：router 的输出决定下一步
 workflow.add_conditional_edges(
-    "router",
+    "memory_retrieve",
     route_by_intent,
     {
         "rag": "rag",
@@ -94,8 +111,9 @@ workflow.add_edge("size", "answer")
 workflow.add_edge("handoff", "answer")
 workflow.add_edge("refund_status", "answer")
 
-# answer → conversation_state → trace → 结束
-workflow.add_edge("answer", "conversation_state")
+# answer → memory_commit → conversation_state → trace → 结束
+workflow.add_edge("answer", "memory_commit")
+workflow.add_edge("memory_commit", "conversation_state")
 workflow.add_edge("conversation_state", "trace")
 workflow.set_finish_point("trace")
 

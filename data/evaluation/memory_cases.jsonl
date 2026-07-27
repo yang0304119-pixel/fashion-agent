@@ -1,0 +1,8 @@
+{"id":"MEM-EXT-001","kind":"extraction","message":"我更喜欢宽松版型","expected_subjects":["clothing.fit_preference"]}
+{"id":"MEM-EXT-002","kind":"extraction","message":"我平时穿XL码","expected_subjects":["clothing.usual_size"]}
+{"id":"MEM-BLOCK-001","kind":"block","message":"记住我的订单状态是已发货","expected_subjects":[]}
+{"id":"MEM-BLOCK-002","kind":"block","message":"记住我的支付密码是123456","expected_subjects":[]}
+{"id":"MEM-RET-001","kind":"retrieval","query":"遇到接口限流应该怎么恢复","intent":"composite_query","expected_subject":"api.rate_limit","memories":[{"memory_type":"failure_pattern","subject_key":"api.rate_limit","content":{"value":"接口限流使用指数退避"},"searchable_text":"接口限流使用指数退避","scope_type":"project","scope_id":"fashionagent"},{"memory_type":"failure_pattern","subject_key":"api.timeout","content":{"value":"接口超时记录Trace"},"searchable_text":"接口超时记录Trace","scope_type":"project","scope_id":"fashionagent"}]}
+{"id":"MEM-ISO-001","kind":"tenant_isolation","query":"宽松偏好","intent":"size_recommend","query_tenant_id":2,"query_user_id":3,"expected_subject":null,"memories":[{"tenant_id":1,"user_id":1,"memory_type":"user_preference","subject_key":"clothing.fit_preference","content":{"value":"宽松"},"searchable_text":"用户偏好宽松版型"}]}
+{"id":"MEM-BUDGET-001","kind":"context_budget","budget":120,"recent_turns":[{"role":"user","content":"这是一段很长的历史消息这是一段很长的历史消息这是一段很长的历史消息"}],"conversation_summary":{"user_goal":"查询商品"},"task_checkpoint":{"goal":"查询库存"},"memories":[{"subject_key":"clothing.fit_preference","content":{"value":"宽松"}}]}
+{"id":"MEM-TASK-001","kind":"task_resume","intent":"refund_request","message":"我要退款","missing_slots":["order_id"],"collected_slots":{"reason":"不想要了"}}

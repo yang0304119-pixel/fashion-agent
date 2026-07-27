@@ -34,6 +34,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 button { color: inherit; }
 
+.memory-button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--forest); font-size: 11px; font-weight: 800; cursor: pointer; }
+.memory-button:hover { border-color: var(--forest); }
+
 .hidden { display: none !important; }
 
 .sr-only {
@@ -455,6 +458,17 @@ button { color: inherit; }
 .order-picker-card .select-context-button { align-self: flex-end; margin-top: auto; }
 
 .toast { position: fixed; z-index: 30; right: 24px; bottom: 24px; max-width: min(360px, calc(100% - 48px)); padding: 13px 16px; border-radius: 12px; color: #fff; background: #29372f; box-shadow: 0 14px 40px rgba(0,0,0,.2); font-size: 12px; }
+.memory-dialog { width: min(680px, calc(100% - 32px)); }
+.memory-toolbar { display: flex; justify-content: flex-end; padding: 12px 24px 0; }
+.memory-list { display: grid; gap: 10px; }
+.memory-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.memory-card > div:first-child { display: grid; gap: 4px; }
+.memory-card small { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.memory-card strong { font-size: 13px; }
+.memory-card span { color: var(--muted); font-size: 11px; }
+.memory-card > div:last-child { display: flex; gap: 6px; }
+.memory-card button { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); font-size: 10px; cursor: pointer; }
+.memory-card .danger-memory-action { color: var(--danger); }
 
 @media (max-width: 980px) {
   .chat-shell { width: calc(100% - 24px); height: calc(100vh - 58px); min-height: 640px; margin: 12px auto; }

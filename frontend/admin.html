@@ -21,13 +21,19 @@
         </span>
       </a>
       <nav class="admin-nav" aria-label="AI 客服运营台导航">
-        <a class="active" href="#dashboard" data-admin-view="dashboard"><span>⌂</span>总览</a>
-        <a href="#knowledge" data-admin-view="knowledge"><span>▣</span>知识文档</a>
-        <a href="#orders" data-admin-view="orders"><span>▦</span>业务上下文</a>
-        <a href="#refunds" data-admin-view="refunds"><span>↗</span>高风险操作审核</a>
-        <a href="#tickets" data-admin-view="tickets"><span>▤</span>人工接管与工单</a>
-        <a href="#traces" data-admin-view="traces"><span>⌁</span>执行轨迹</a>
-        <a href="#cases" data-admin-view="cases"><span>◇</span>未解决案例</a>
+        <a class="active" href="#dashboard" data-admin-view="dashboard" data-permission="workbench.read"><span>⌂</span>今日待办</a>
+        <a href="#tickets" data-admin-view="tickets" data-permission="ticket.read"><span>▤</span>人工处理</a>
+        <a href="#orders" data-admin-view="orders" data-permission="order.read"><span>▦</span>订单查询</a>
+        <a href="#cases" data-admin-view="cases" data-permission="case.handle"><span>◇</span>未解决案例</a>
+        <a href="#quality" data-admin-view="quality" data-permission="quality.business.read"><span>✓</span>业务质检</a>
+        <a href="#refunds" data-admin-view="refunds" data-permission="refund.review"><span>↗</span>退款审核</a>
+        <a href="#knowledge" data-admin-view="knowledge" data-permission="knowledge.draft"><span>▣</span>知识运营</a>
+        <a href="#users" data-admin-view="users" data-permission="user.manage"><span>♙</span>账号管理</a>
+        <a href="#settings" data-admin-view="settings" data-permission="tenant.settings"><span>⚙</span>租户设置</a>
+        <a href="#audit" data-admin-view="audit" data-permission="audit.read"><span>☷</span>操作审计</a>
+        <a href="#traces" data-admin-view="traces" data-permission="agent.trace.read"><span>⌁</span>Agent Trace</a>
+        <a href="#agentops" data-admin-view="agentops" data-permission="system.health.read"><span>◉</span>AgentOps</a>
+        <a href="#memory" data-admin-view="memory" data-permission="memory.diagnostics.read"><span>◎</span>记忆系统</a>
       </nav>
       <div class="admin-account">
         <span id="adminIdentity"></span>
@@ -144,9 +150,9 @@
             <button class="button secondary" type="submit">查询</button>
             <button class="button secondary" id="clearKnowledgeFiltersBtn" type="button">清除</button>
           </form>
-          <button class="button primary" id="openKnowledgeUploadBtn" type="button">上传商家资料</button>
+          <button class="button primary" id="openKnowledgeUploadBtn" data-permission="knowledge.draft" type="button">上传商家资料</button>
         </section>
-        <p class="knowledge-boundary-note">文档和知识库版本只属于当前登录管理员所在租户；审核通过后需构建候选版本并显式上线。</p>
+        <p class="knowledge-boundary-note">文档和知识库版本只属于当前登录员工所在租户；审核通过后需由具备发布权限的账号显式上线。</p>
         <section class="knowledge-publish-center">
           <div class="table-heading">
             <div>
@@ -155,8 +161,8 @@
               <p>构建候选版本不会影响当前消费者问答；确认后再显式上线。</p>
             </div>
             <div class="knowledge-publish-actions">
-              <button class="button secondary" id="rollbackKnowledgeBuildBtn" type="button">回滚上一版本</button>
-              <button class="button primary" id="createKnowledgeBuildBtn" type="button">构建候选知识库</button>
+              <button class="button secondary" id="rollbackKnowledgeBuildBtn" data-permission="knowledge.publish" type="button">回滚上一版本</button>
+              <button class="button primary" id="createKnowledgeBuildBtn" data-permission="knowledge.publish" type="button">构建候选知识库</button>
             </div>
           </div>
           <div id="knowledgeBuildSummary" class="knowledge-build-summary"></div>
@@ -362,12 +368,92 @@
         <div id="adminCasesContent"></div>
         <div class="pagination" id="adminCasesPagination"></div>
       </div>
+
+      <div class="hidden" data-admin-panel="memory">
+        <section class="case-metrics" aria-label="记忆系统统计">
+          <article><span>记忆总数</span><strong id="memoryTotal">—</strong></article>
+          <article><span>活跃记忆</span><strong id="memoryActive">—</strong></article>
+          <article><span>已淘汰/删除</span><strong id="memoryInactive">—</strong></article>
+        </section>
+        <section class="admin-card">
+          <div class="pane-heading"><strong>当前租户记忆治理</strong><span>仅显示统计，不默认暴露用户记忆正文</span></div>
+          <div id="memoryStatsContent"></div>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="quality">
+        <section class="dashboard-grid">
+          <article class="dashboard-card"><span class="dashboard-card-label">请求总数</span><strong id="qualityTotalRequests">—</strong><p>当前租户进入Agent的业务请求</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">自动解决率</span><strong id="qualityResolutionRate">—</strong><p>无需人工接管且形成有效回复</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">转人工</span><strong id="qualityHumanHandoffs">—</strong><p>需要客服继续处理的请求</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">处理失败</span><strong id="qualityFailedRequests">—</strong><p>没有形成可靠业务结果的请求</p></article>
+        </section>
+        <section class="admin-card">
+          <div class="pane-heading"><strong>业务质检样本</strong><span>只展示用户问题、AI回复、业务结论和建议，不展示技术Trace</span></div>
+          <div id="businessQualityContent"></div>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="users">
+        <section class="admin-card">
+          <div class="table-heading">
+            <div><h2>商家员工账号</h2><p>每人使用独立账号，角色决定可访问的工作区和操作权限。</p></div>
+          </div>
+          <form id="staffUserCreateForm" class="knowledge-test-form">
+            <label>用户名<input id="staffUsername" maxlength="50" required placeholder="service_zhang"></label>
+            <label>初始密码<input id="staffPassword" type="password" minlength="12" maxlength="128" required></label>
+            <label>角色
+              <select id="staffRole" required>
+                <option value="customer_service">客服运营</option>
+                <option value="supervisor">客服主管</option>
+                <option value="tenant_admin">租户管理员</option>
+                <option value="developer">开发人员</option>
+              </select>
+            </label>
+            <button class="button primary" type="submit">创建账号</button>
+          </form>
+          <div id="staffUsersContent"></div>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="settings">
+        <section class="admin-card">
+          <div class="table-heading"><div><h2>租户设置</h2><p>配置当前商家的基础信息和自动退款阈值。</p></div></div>
+          <form id="tenantSettingsForm" class="knowledge-test-form">
+            <label>商家名称<input id="tenantName" maxlength="100" required></label>
+            <label>联系人<input id="tenantContact" maxlength="50"></label>
+            <label>自动退款上限<input id="tenantRefundLimit" type="number" min="0" max="100000" step="0.01" required></label>
+            <button class="button primary" type="submit">保存设置</button>
+          </form>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="audit">
+        <section class="admin-card">
+          <div class="table-heading"><div><h2>人工操作审计</h2><p>记录退款审批、知识发布、账号和配置变更。</p></div></div>
+          <div id="auditEventsContent"></div>
+        </section>
+      </div>
+
+      <div class="hidden" data-admin-panel="agentops">
+        <section class="dashboard-grid">
+          <article class="dashboard-card"><span class="dashboard-card-label">系统状态</span><strong id="agentopsHealth">—</strong><p>当前租户Agent服务健康状态</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">RAG请求</span><strong id="agentopsRagRequests">—</strong><p>知识问答请求和失败情况</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">工具事件</span><strong id="agentopsToolEvents">—</strong><p>工具调用、错误和恢复统计</p></article>
+          <article class="dashboard-card"><span class="dashboard-card-label">安全边界事件</span><strong id="agentopsBoundaryEvents">—</strong><p>目标授权与危险请求阻断</p></article>
+        </section>
+        <section class="admin-card"><div class="pane-heading"><strong>AgentOps诊断摘要</strong><span>仅开发人员可见</span></div><div id="agentopsContent"></div></section>
+      </div>
+
+      <div class="hidden" data-admin-panel="forbidden">
+        <section class="admin-card"><h2>无权访问</h2><p>当前账号没有访问该工作区的权限。</p></section>
+      </div>
     </main>
   </div>
 
   <main class="admin-guard" id="adminGuard">
     <div class="brand-mark" aria-hidden="true">FA</div>
-    <h1>正在验证管理员身份</h1>
+    <h1>正在验证商家员工身份</h1>
     <p>请稍候，系统正在确认您的工作台权限。</p>
   </main>
 
@@ -552,18 +638,18 @@
           <label>过期时间
             <input id="knowledgeExpiresAt" type="datetime-local">
           </label>
-          <button class="button secondary" id="saveKnowledgeValidityBtn" type="button">保存有效期</button>
+          <button class="button secondary" id="saveKnowledgeValidityBtn" data-permission="knowledge.review" type="button">保存有效期</button>
         </div>
       </section>
       <p class="form-error" id="knowledgeDetailError" role="alert"></p>
       <div class="knowledge-review-actions">
-        <button class="button secondary" id="parseKnowledgeBtn" type="button">开始解析</button>
-        <button class="button secondary" id="saveKnowledgeContentBtn" type="button">保存修订</button>
-        <button class="button primary" id="approveKnowledgeBtn" type="button">审核通过</button>
+        <button class="button secondary" id="parseKnowledgeBtn" data-permission="knowledge.draft" type="button">开始解析</button>
+        <button class="button secondary" id="saveKnowledgeContentBtn" data-permission="knowledge.draft" type="button">保存修订</button>
+        <button class="button primary" id="approveKnowledgeBtn" data-permission="knowledge.review" type="button">审核通过</button>
       </div>
       <div class="knowledge-reject-row">
         <input id="knowledgeRejectReason" maxlength="500" placeholder="拒绝原因，例如：规则缺少活动商品例外说明">
-        <button class="button danger" id="rejectKnowledgeBtn" type="button">拒绝</button>
+        <button class="button danger" id="rejectKnowledgeBtn" data-permission="knowledge.review" type="button">拒绝</button>
       </div>
       <form id="knowledgeRevisionUploadForm" class="knowledge-revision-upload">
         <label>上传新版本

@@ -1,0 +1,65 @@
+{
+  "baseline_date": "2026-07-21",
+  "scope": "local development offline baseline; not production accuracy or SLA",
+  "rag": {
+    "cases": 31,
+    "relevant_source_labels": 51,
+    "indexed_chunks": 154,
+    "unique_sources": 11,
+    "recall_at_1": 0.5941,
+    "recall_at_3": 0.8333,
+    "recall_at_5": 0.8763,
+    "hit_rate_at_1": 0.8387,
+    "hit_rate_at_3": 0.9355,
+    "hit_rate_at_5": 0.9355,
+    "mrr_at_5": 0.8817,
+    "errors": 0,
+    "source_report": "data/evaluation/rag-report.json"
+  },
+  "intent_two_layer_offline": {
+    "cases": 40,
+    "correct": 26,
+    "accuracy": 0.65,
+    "macro_precision": 0.7727,
+    "macro_recall": 0.5909,
+    "macro_f1": 0.6153,
+    "write_intent_precision": 1.0,
+    "write_intent_recall": 0.375,
+    "fallback_rate": 0.2,
+    "planner_included": false,
+    "source_report": "data/evaluation/intent-report.json"
+  },
+  "memory": {
+    "cases": 8,
+    "passed": 8,
+    "case_pass_rate": 1.0,
+    "source_report": "data/evaluation/memory-report.json"
+  },
+  "knowledge_processing": {
+    "documents": 11,
+    "strict_passed": 10,
+    "warnings": 1,
+    "failed": 0,
+    "approved": 0,
+    "strict_pass_rate": 0.9091,
+    "approval_rate": 0.0,
+    "source_report": "data/knowledge/processed/quality-report.json"
+  },
+  "automated_tests": {
+    "run": 217,
+    "passed": 217,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "duration_seconds": 102.795,
+    "command": "D:\\CondaEnvs\\fashionagent\\python.exe -X utf8 -m unittest discover -s tests -q"
+  },
+  "not_measured": [
+    "full_router_accuracy_with_remote_planner",
+    "answer_groundedness",
+    "production_tool_success_rate",
+    "auto_resolution_rate",
+    "human_review_trigger_precision_recall",
+    "production_end_to_end_latency",
+    "csat"
+  ]
+}
